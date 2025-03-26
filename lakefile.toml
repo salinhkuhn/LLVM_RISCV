@@ -1,0 +1,20 @@
+name = "RiscvDialect"
+version = "0.1.0"
+defaultTargets = ["riscvdialect"]
+
+[[lean_lib]]
+name = "RiscvDialect"
+
+[[lean_exe]]
+name = "riscvdialect"
+root = "Main"
+
+[[require]]
+name = "SSA"
+git = "https://github.com/opencompl/lean-mlir.git"
+rev = "forSarah"
+
+[[require]]
+name = "Lean_RV64D_LEAN"
+git = "https://github.com/opencompl/sail-riscv-lean.git"
+rev = "forSarah"
