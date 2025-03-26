@@ -1,13 +1,9 @@
 name = "RiscvDialect"
 version = "0.1.0"
-defaultTargets = ["riscvdialect"]
+defaultTargets = ["RiscvDialect"]
 
 [[lean_lib]]
 name = "RiscvDialect"
-
-[[lean_exe]]
-name = "riscvdialect"
-root = "Main"
 
 [[require]]
 name = "SSA"
