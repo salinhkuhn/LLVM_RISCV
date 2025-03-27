@@ -20,7 +20,9 @@ open PureFunctions
 proofs: pure functions executed using the skeleton <-> untouched execution semantics in the LeanRV64DLEAN
 to do: write some proof automation, tactic to do the proofs.
 -/
-
+/-
+arrived at this after reverse engineering back from bit vecotr extraction
+-/
 def skeleton_binary  (rs2 : regidx) (rs1 : regidx) (rd : regidx) (execute_func : BitVec 64 → BitVec 64 → BitVec 64) : SailM Retired := do
   let rs1_val ← rX_bits rs1
   let rs2_val ← rX_bits rs2
@@ -121,7 +123,7 @@ theorem shiftiwop_eq_SRAIW (shamt : (BitVec 5)) (rs1 : regidx) (rd : regidx) :
   unfold Functions.execute_SHIFTIWOP skeleton_unary
   rfl
 
-theorem shiftiop_eq_SLLI (shamt : (BitVec 6)) (op : sop) (rs1 : regidx) (rd : regidx) :
+theorem shiftiop_eq_SLLI (shamt : (BitVec 6))  (rs1 : regidx) (rd : regidx) :
     Functions.execute_SHIFTIOP (shamt) (rs1) (rd) (sop.RISCV_SLLI)
       = skeleton_unary rs1 rd (fun val1 => RV64.SHIFTIOP_pure64_RISCV_SLLI shamt val1)
   := by
@@ -129,7 +131,7 @@ theorem shiftiop_eq_SLLI (shamt : (BitVec 6)) (op : sop) (rs1 : regidx) (rd : re
   simp only [Nat.reducePow, Nat.reduceMul, BitVec.shiftLeft_eq',
     EffectKind.return_impure_toMonad_eq, bind_pure_comp, bind_map_left, BitVec.shiftLeft_eq]
 
-theorem shiftiop_eq_SRLI (shamt : (BitVec 6)) (op : sop) (rs1 : regidx) (rd : regidx) :
+theorem shiftiop_eq_SRLI (shamt : (BitVec 6))  (rs1 : regidx) (rd : regidx) :
     Functions.execute_SHIFTIOP (shamt) (rs1) (rd) (sop.RISCV_SRLI)
       = skeleton_unary rs1 rd (fun val1 => RV64.SHIFTIOP_pure64_RISCV_SRLI shamt val1)
   := by
@@ -186,7 +188,9 @@ theorem rtype_eq_SUB (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
       = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.RTYPE_pure64_RISCV_SUB val2 val1)
   := by
   unfold RV64.RTYPE_pure64_RISCV_SUB Functions.execute_RTYPE skeleton_binary
-  simp?
+  simp only [Nat.reducePow, Nat.reduceMul, EffectKind.return_impure_toMonad_eq, bind_pure_comp,
+    bind_assoc, bind_map_left, BitVec.sub_eq]
+
 
 theorem rtype_eq_SLL (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_RTYPE (rs2) (rs1) (rd) (rop.RISCV_SLL)
@@ -269,9 +273,12 @@ theorem remw_eq_unsigned (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_REMW (rs2) (rs1) (rd) (false)
       = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.REMW_pure64_unsigned val2 val1)
   := by
-  unfold Functions.execute_REMW skeleton_binary RV64.REMW_pure64_unsigned sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int
-  dsimp
-  simp!
+  unfold skeleton_binary RV64.REMW_pure64_unsigned Functions.execute_REMW sign_extend Sail.BitVec.signExtend to_bits get_slice_int Sail.BitVec.extractLsb
+  simp
+  have h (n m : Nat) : n % m = 0 ↔ (n : Int) % m = 0 := by
+    omega
+  simp only [h, Nat.cast_ofNat]
+
 
 
 theorem rem_eq_unsigned (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
@@ -356,9 +363,7 @@ theorem mul_eq_ttt (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
   unfold Functions.execute_MUL skeleton_binary
   rfl
 
-
 -- here
-
 theorem divw_eq_signed (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_DIVW (rs2 ) (rs1) (rd) true
       = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.DIVW_pure64_signed val2 val1)
@@ -368,19 +373,15 @@ theorem divw_eq_signed (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
   unfold Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int RV64.DIVW_pure64_signed
   simp only [Nat.reduceAdd, Int.reduceNeg, Int.ofNat_toNat, Nat.sub_zero]
 
-
+--looks equivalent
 theorem divw_eq_unsigned (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_DIVW (rs2 ) (rs1) (rd) false
       = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.DIVW_pure64_unsigned val2 val1)
   := by
   unfold Functions.execute_DIVW RV64.DIVW_pure64_unsigned skeleton_binary sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int
-  simp only [Nat.reducePow, Nat.reduceMul, Nat.sub_zero, Nat.reduceAdd,
-    EffectKind.return_impure_toMonad_eq, sail_hPow_eq, Int.reduceToNat, Int.reducePow,
-    Int.reduceMul, Bool.false_eq_true, ↓reduceIte, beq_iff_eq, Int.natCast_eq_zero, Int.reduceNeg,
-    Int.reduceSub, gt_iff_lt, Bool.false_and, Int.ofNat_toNat, bind_pure_comp, pure_bind,
-    BitVec.extractLsb_toNat, Nat.shiftRight_zero, Int.ofNat_emod, Nat.cast_ofNat, Int.ofNat_eq_coe]
-
-
+  have h (n m : Nat) : n % m = 0 ↔ (n : Int) % m = 0 := by
+    omega
+  simp [h]
 
 theorem div_eq_signed (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_DIV (rs2) (rs1) (rd) true
@@ -392,16 +393,37 @@ theorem div_eq_signed (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
   simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, Nat.reduceAdd,
     Int.reduceSub, Int.reduceNeg, zero_sub, Int.ofNat_toNat]
 
+/-
+(do
+    let y ← rX_bits rs1
+    let y_1 ← rX_bits rs2
+    (fun a => RETIRE_SUCCESS) <$>
+        wX_bits rd
+          (BitVec.extractLsb' 0 64
+            (BitVec.ofInt 65 ((if y_1.toNat = 0 then -1 else (↑y.toNat).tdiv ↑y_1.toNat) ⊔ 0)))) =
+  do
+  let rs1_val ← rX_bits rs1
+  let rs2_val ← rX_bits rs2
+  (fun a => RETIRE_SUCCESS) <$>
+      wX_bits rd
+        (BitVec.extractLsb' 0 64
+          (BitVec.ofNat 65 (if rs2_val.toNat = 0 then -1 else (↑rs1_val.toNat).tdiv ↑rs2_val.toNat).toNat))
+-/
+
 theorem div_eq_unsigned (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_DIV (rs2) (rs1) (rd) false
       = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.DIV_pure64_unsigned val2 val1)
   := by
-  unfold Functions.execute_DIV RV64.DIV_pure64_unsigned skeleton_binary Functions.xlen to_bits get_slice_int
-  simp
-  sorry
+  unfold Functions.execute_DIV skeleton_binary  RV64.DIV_pure64_unsigned
+  simp [to_bits ,Functions.xlen,  get_slice_int]
+  have h (x : Int): BitVec.ofInt 65 (max x 0) = BitVec.ofNat 65 (x.toNat) := by -- potenitl new lemma ?
+    cases x
+    . simp only [Int.ofNat_eq_coe, Int.ofNat_zero_le, sup_of_le_left, BitVec.ofInt_natCast,
+      Int.toNat_ofNat]
+    . simp only [Int.negSucc_max_zero, BitVec.ofInt_ofNat, Int.toNat_negSucc]
+  simp only [Int.reduceNeg, h]
 
 
---
 theorem itype_eq_ADDI (imm : (BitVec 12)) (rs1 : regidx) (rd : regidx) :
     Functions.execute_ITYPE (imm) (rs1) (rd) (iop.RISCV_ADDI)
       = skeleton_unary rs1 rd (fun val1 => RV64.ITYPE_pure64_RISCV_ADDI imm val1)
@@ -467,30 +489,93 @@ theorem zicond_rtype_nez (arg0 : regidx) (arg1 : regidx) (arg2 : regidx) :
   simp
   rfl
 
-
-
-theorem zbs_rytpe_eq (rs2 : regidx) (rs1 : regidx) (rd : regidx) (op : brop_zbs) :
-    Functions.execute_ZBS_RTYPE rs2 rs1 rd op
-      = skeleton_binary rs2 rs1 rd (fun val1 val2 => execute_ZBS_RTYPE_pure64 val2 val1 op)
+-- here
+  theorem zbs_rytpe_eq_BEXT (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
+    Functions.execute_ZBS_RTYPE rs2 rs1 rd brop_zbs.RISCV_BEXT
+      = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.ZBS_RTYPE_pure64_RISCV_BEXT val2 val1)
   := by
-  unfold Functions.execute_ZBS_RTYPE skeleton_binary execute_ZBS_RTYPE_pure64
+  unfold Functions.execute_ZBS_RTYPE skeleton_binary RV64.ZBS_RTYPE_pure64_RISCV_BEXT shift_bits_left Sail.BitVec.extractLsb zero_extend Sail.BitVec.zeroExtend bool_to_bits bool_bits_forwards
+  simp
   rfl
 
-theorem zbs_iop_eq (shamt : (BitVec 6)) (rs1 : regidx) (rd : regidx) (op : biop_zbs) :
-    execute_ZBS_IOP (shamt ) (rs1) (rd) (op) = skeleton_unary rs1 rd (fun val1 => execute_ZBS_IOP_pure64 shamt val1 op)
+theorem zbs_rytpe_eq_BINV (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
+    Functions.execute_ZBS_RTYPE rs2 rs1 rd  brop_zbs.RISCV_BINV
+      = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.ZBS_RTYPE_pure64_BINV val2 val1)
   := by
-  unfold Functions.execute_ZBS_IOP skeleton_unary execute_ZBS_IOP_pure64
+  unfold Functions.execute_ZBS_RTYPE skeleton_binary RV64.ZBS_RTYPE_pure64_BINV
   rfl
+
+
+theorem zbs_rytpe_eq_BSET (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
+    Functions.execute_ZBS_RTYPE rs2 rs1 rd (brop_zbs.RISCV_BSET)
+      = skeleton_binary rs2 rs1 rd (fun val1 val2 =>RV64.ZBS_RTYPE_pure64_RISCV_BSET val2 val1)
+  := by
+  unfold Functions.execute_ZBS_RTYPE skeleton_binary
+  rfl
+
+
+theorem zbs_iop_eq_BCLRI (shamt : (BitVec 6)) (rs1 : regidx) (rd : regidx) :
+    execute_ZBS_IOP (shamt ) (rs1) (rd) (biop_zbs.RISCV_BCLRI) = skeleton_unary rs1 rd (fun val1 => RV64.ZBS_IOP_pure64_RISCV_BCLRI shamt val1)
+  := by
+  unfold Functions.execute_ZBS_IOP skeleton_unary
+  rfl
+
+theorem zbs_iop_eq_BEXTI (shamt : (BitVec 6)) (rs1 : regidx) (rd : regidx) :
+    execute_ZBS_IOP (shamt ) (rs1) (rd) (biop_zbs.RISCV_BEXTI) = skeleton_unary rs1 rd (fun val1 => RV64.ZBS_IOP_pure64_RISCV_BEXTI shamt val1)
+  := by
+  unfold Functions.execute_ZBS_IOP skeleton_unary
+  rfl
+
+
+theorem zbs_iop_eq_BINVI (shamt : (BitVec 6)) (rs1 : regidx) (rd : regidx):
+    execute_ZBS_IOP (shamt ) (rs1) (rd) (biop_zbs.RISCV_BINVI) = skeleton_unary rs1 rd (fun val1 => RV64.ZBS_IOP_pure64_RISCV_BINVI (shamt) (val1)) := by
+  unfold Functions.execute_ZBS_IOP skeleton_unary RV64.ZBS_IOP_pure64_RISCV_BINVI
+  simp
+  rfl
+
+theorem zbs_iop_eq_BSETI (shamt : (BitVec 6)) (rs1 : regidx) (rd : regidx):
+    execute_ZBS_IOP (shamt ) (rs1) (rd) (biop_zbs.RISCV_BSETI) = skeleton_unary rs1 rd (fun val1 => RV64.ZBS_IOP_pure64_RISCV_BSETI shamt val1)
+  := by
+  unfold Functions.execute_ZBS_IOP skeleton_unary  RV64.ZBS_IOP_pure64_RISCV_BSETI
+  rfl
+
 
 -- to do ZBKS for crypto
-
-theorem zbb_rtypew_eq (rs2 : regidx) (rs1 : regidx) (rd : regidx) (op : bropw_zbb) :
-    Functions.execute_ZBB_RTYPEW (rs2) (rs1) (rd) (op)
-    = skeleton_binary rs2 rs1 rd (fun val1 val2 => execute_ZBB_RTYPEW_pure64 val2 val1 op)
+theorem zbb_rtypew_eq_RORW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (op : bropw_zbb) :
+    Functions.execute_ZBB_RTYPEW (rs2) (rs1) (rd) (bropw_zbb.RISCV_RORW)
+    = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.ZBB_RTYPEW_pure64_RISCV_RORW val2 val1)
   := by
-  unfold Functions.execute_ZBB_RTYPEW skeleton_binary execute_ZBB_RTYPEW_pure64
-  rfl
+  unfold Functions.execute_ZBB_RTYPEW skeleton_binary RV64.ZBB_RTYPEW_pure64_RISCV_RORW Sail.BitVec.extractLsb rotate_bits_right sign_extend Sail.BitVec.signExtend
+  simp
+  unfold shift_bits_right shift_bits_left BitVec.length to_bits get_slice_int
+  have h (x : BitVec 64): BitVec.setWidth 32 x = BitVec.extractLsb' 0 32 x := by rfl
+  have h1 (x : BitVec 64): BitVec.setWidth 5 x = BitVec.extractLsb' 0 5 x := by rfl
+  simp [h , h1]
+  unfold BitVec.extractLsb
+  simp only [Nat.sub_zero, Nat.reduceAdd]
 
+theorem zbb_rtypew_eq_ROLW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (op : bropw_zbb) :
+    Functions.execute_ZBB_RTYPEW (rs2) (rs1) (rd) (bropw_zbb.RISCV_ROLW)
+    = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.ZBB_RTYPEW_pure64_RISCV_ROLW val2 val1 )
+  := by
+  unfold Functions.execute_ZBB_RTYPEW skeleton_binary RV64.ZBB_RTYPEW_pure64_RISCV_ROLW
+  have h (x : BitVec 64): BitVec.setWidth 32 x = BitVec.extractLsb' 0 32 x := by rfl
+  have h1 (x : BitVec 64): BitVec.setWidth 5 x = BitVec.extractLsb' 0 5 x := by rfl
+  simp only [Nat.reducePow, Nat.reduceMul, Nat.sub_zero, Nat.reduceAdd,
+    EffectKind.return_impure_toMonad_eq, sail_hPow_eq, Int.reduceToNat, Int.reducePow,
+    Int.reduceMul, bind_pure_comp, pure_bind, h, BitVec.extractLsb_toNat, Nat.shiftRight_zero,
+    BitVec.shiftLeft_eq, BitVec.ofInt_ofNat, BitVec.reduceExtracLsb', BitVec.sub_eq,
+    BitVec.zero_sub, BitVec.toNat_neg, BitVec.ushiftRight_eq, BitVec.or_eq]
+  unfold sign_extend Sail.BitVec.signExtend rotate_bits_left shift_bits_left Sail.BitVec.extractLsb BitVec.extractLsb shift_bits_right
+  simp only [Nat.sub_zero, Nat.reduceAdd, BitVec.shiftLeft_eq', BitVec.extractLsb'_toNat,
+    Nat.shiftRight_zero, Nat.reducePow, BitVec.ushiftRight_eq', BitVec.toNat_sub]
+  unfold BitVec.length
+  simp only [Nat.reducePow, BitVec.extractLsb'_toNat, Nat.shiftRight_zero, Nat.cast_ofNat]
+  unfold to_bits get_slice_int
+  simp only [Nat.reduceAdd, Int.reduceToNat, Nat.cast_ofNat, BitVec.ofInt_ofNat,
+    BitVec.reduceExtracLsb', BitVec.toNat_ofNat, Nat.reducePow, Nat.zero_mod, add_zero]
+
+-- STOPPED BC DIDDNT YET MODELL MORE IN DIALECT
 
 theorem zbb_extop_eq (rs1 : regidx) (rd : regidx) (op : extop_zbb)  :
     Functions.execute_ZBB_EXTOP (rs1) (rd) (op)
