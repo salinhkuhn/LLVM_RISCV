@@ -255,11 +255,12 @@ theorem execute_RTYPE_pure64_RISCV_SRA (rs2_val : BitVec 64) (rs1_val : BitVec 6
 theorem execute_REMW_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_REMW_pure64 False rs2_val rs1_val
     = RV64.REMW_pure64_unsigned rs2_val rs1_val  := by
-  unfold RV64.REMW_pure64_unsigned execute_REMW_pure64
-  simp
-  unfold sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int
-  rw [← Int.ofNat_eq_coe, ← Int.ofNat_eq_coe, ← Int.ofNat_eq_coe]
-  simp
+  unfold RV64.REMW_pure64_unsigned execute_REMW_pure64 sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int
+  simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, Nat.reduceAdd,
+    decide_false, Bool.false_eq_true, ↓reduceIte, Nat.sub_zero, BitVec.extractLsb_toNat,
+    Nat.shiftRight_zero, Nat.reducePow, Int.ofNat_emod, Nat.cast_ofNat, beq_iff_eq, Int.ofNat_toNat,
+    Int.ofNat_eq_coe]
+
 
 
 theorem execute_REMW_pure64_signed :
@@ -402,7 +403,7 @@ theorem execute_MUL_pure64_ttt (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
   simp only [Nat.reduceAdd, Int.ofNat_eq_coe, Int.ofNat_toNat, Int.mul_def]
 
 
-theorem exexcute_DIVW_pure64_signed (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
+theorem excute_DIVW_pure64_signed (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
   execute_DIVW_pure64 (True) rs2_val rs1_val
     = RV64.DIVW_pure64_signed rs2_val rs1_val
   := by
@@ -414,43 +415,37 @@ theorem exexcute_DIVW_pure64_signed (rs2_val : BitVec 64) (rs1_val : BitVec 64) 
   simp only [Nat.reduceAdd, Int.reduceNeg, Int.ofNat_toNat]
 
 --tdiv
-theorem exexcute_DIVW_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64)
+theorem execute_DIVW_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64)
     : execute_DIVW_pure64 (False) rs2_val rs1_val
     =
     RV64.DIVW_pure64_unsigned rs2_val rs1_val
   := by
   unfold RV64.DIVW_pure64_unsigned execute_DIVW_pure64
-  simp
   unfold sign_extend Sail.BitVec.signExtend to_bits get_slice_int Sail.BitVec.extractLsb
-  rw [← Int.ofNat_eq_coe, ← Int.ofNat_eq_coe, ← Int.ofNat_eq_coe ]
-  simp
+  simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, Nat.reduceAdd,
+    decide_false, Bool.false_eq_true, ↓reduceIte, Nat.sub_zero, BitVec.extractLsb_toNat,
+    Nat.shiftRight_zero, Nat.reducePow, Int.ofNat_emod, Nat.cast_ofNat, beq_iff_eq, Int.reduceNeg,
+    Int.reduceSub, gt_iff_lt, Bool.false_and, Int.ofNat_toNat, Int.ofNat_eq_coe]
 
-
-theorem exexcute_DIV_pure64_signed (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
-     execute_DIVW_pure64 (True) rs2_val rs1_val
+theorem execute_DIV_pure64_signed (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
+     execute_DIV_pure64 (True) rs2_val rs1_val
       = RV64.DIV_pure64_signed rs2_val rs1_val
   := by
-  unfold RV64.DIV_pure64_signed  execute_DIVW_pure64
-  simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, decide_true, ↓reduceIte,
-    Nat.sub_zero, Nat.reduceAdd, beq_iff_eq, Int.reduceNeg, Int.reduceSub, gt_iff_lt, Bool.true_and,
-    decide_eq_true_eq, Int.zero_sub]
-  unfold sign_extend Sail.BitVec.signExtend to_bits get_slice_int Sail.BitVec.extractLsb
-  simp only [Nat.reduceAdd, Int.reduceNeg, Int.ofNat_toNat]
+  unfold RV64.DIV_pure64_signed execute_DIV_pure64 to_bits get_slice_int Functions.xlen xlen_max_signed xlen_min_signed Functions.xlen
+  simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, Nat.reduceAdd,
+    decide_true, ↓reduceIte, beq_iff_eq, Int.reduceNeg, Int.reduceSub, gt_iff_lt, Bool.true_and,
+    decide_eq_true_eq, zero_sub, Int.ofNat_toNat]
+
 
 theorem execute_DIV_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64)
-    : execute_DIVW_pure64 (False) rs2_val rs1_val
+    : execute_DIV_pure64 (False) rs2_val rs1_val
     = RV64.DIV_pure64_unsigned rs2_val rs1_val
   := by
-  unfold  RV64.DIV_pure64_unsigned execute_DIVW_pure64
-  simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, decide_false,
-    Bool.false_eq_true, ↓reduceIte, Nat.sub_zero, Nat.reduceAdd, beq_iff_eq, Int.reduceNeg,
-    Int.reduceSub, gt_iff_lt, Bool.false_and, BitVec.extractLsb_toNat, Nat.shiftRight_zero,
-    Nat.reducePow, Int.ofNat_eq_coe, Int.ofNat_emod, Int.Nat.cast_ofNat_Int, Int.ofNat_toNat]
-  unfold sign_extend Sail.BitVec.signExtend to_bits get_slice_int Sail.BitVec.extractLsb
-  rw [← Int.ofNat_eq_coe, ← Int.ofNat_eq_coe, ← Int.ofNat_eq_coe ]
-  simp only [Nat.reduceAdd, BitVec.extractLsb_toNat, Nat.shiftRight_zero, Nat.sub_zero,
-    Nat.reducePow, Int.ofNat_eq_coe, Int.ofNat_emod, Int.Nat.cast_ofNat_Int, Int.reduceNeg,
-    Int.ofNat_toNat]
+  unfold  RV64.DIV_pure64_unsigned execute_DIV_pure64
+  simp only [decide_false, Bool.false_eq_true, ↓reduceIte, beq_iff_eq, Int.natCast_eq_zero,
+    Int.reduceNeg, gt_iff_lt, Bool.false_and, Int.ofNat_eq_coe]
+  simp [to_bits ,Functions.xlen]
+  rfl
 
 theorem execute_ITYPE_pure64_RISCV_ADDI (imm : BitVec 12) (rs1_val : BitVec 64) : PureFunctions.execute_ITYPE_pure64 imm rs1_val iop.RISCV_ADDI
     = RV64.ITYPE_pure64_RISCV_ADDI imm rs1_val := by

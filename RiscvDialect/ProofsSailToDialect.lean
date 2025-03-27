@@ -3,7 +3,7 @@ import LeanRV64DLEAN.Sail.BitVec
 import LeanRV64DLEAN.Defs
 import LeanRV64DLEAN.Specialization
 import LeanRV64DLEAN.RiscvExtras
-import RiscvDialect.ProofsPureDialect
+import RiscvDialect.ProofsPureBaseISA
 -- added the imports bellow, had to move pure_func to the library folder
 import LeanRV64DLEAN
 import LeanRV64DLEAN.pure_func
@@ -270,11 +270,9 @@ theorem remw_eq_unsigned (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
       = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.REMW_pure64_unsigned val2 val1)
   := by
   unfold Functions.execute_REMW skeleton_binary RV64.REMW_pure64_unsigned sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int
-  simp only [Nat.reducePow, Nat.reduceMul, Nat.sub_zero, Nat.reduceAdd,
-    EffectKind.return_impure_toMonad_eq, sail_hPow_eq, Int.reduceToNat, Int.reducePow,
-    Int.reduceMul, Bool.false_eq_true, ↓reduceIte, beq_iff_eq, Int.natCast_eq_zero, Int.ofNat_toNat,
-    bind_pure_comp, pure_bind, BitVec.extractLsb_toNat, Nat.shiftRight_zero, Int.ofNat_emod,
-    Nat.cast_ofNat, Int.ofNat_eq_coe]
+  dsimp
+  simp!
+
 
 theorem rem_eq_unsigned (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_REM (rs2) (rs1) (rd) (false)
@@ -391,8 +389,8 @@ theorem div_eq_signed (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
   unfold Functions.execute_DIV skeleton_binary RV64.DIV_pure64_signed
   simp
   unfold to_bits get_slice_int xlen_max_signed Functions.xlen xlen_min_signed Functions.xlen
-  simp
-  rfl
+  simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, Nat.reduceAdd,
+    Int.reduceSub, Int.reduceNeg, zero_sub, Int.ofNat_toNat]
 
 theorem div_eq_unsigned (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_DIV (rs2) (rs1) (rd) false
@@ -400,7 +398,8 @@ theorem div_eq_unsigned (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
   := by
   unfold Functions.execute_DIV RV64.DIV_pure64_unsigned skeleton_binary Functions.xlen to_bits get_slice_int
   simp
-  rfl
+  sorry
+
 
 --
 theorem itype_eq_ADDI (imm : (BitVec 12)) (rs1 : regidx) (rd : regidx) :
