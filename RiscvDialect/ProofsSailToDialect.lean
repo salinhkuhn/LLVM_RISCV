@@ -541,7 +541,7 @@ theorem zbs_iop_eq_BSETI (shamt : (BitVec 6)) (rs1 : regidx) (rd : regidx):
 
 
 -- to do ZBKS for crypto
-theorem zbb_rtypew_eq_RORW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (op : bropw_zbb) :
+theorem zbb_rtypew_eq_RORW (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_ZBB_RTYPEW (rs2) (rs1) (rd) (bropw_zbb.RISCV_RORW)
     = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.ZBB_RTYPEW_pure64_RISCV_RORW val2 val1)
   := by
@@ -554,7 +554,7 @@ theorem zbb_rtypew_eq_RORW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (op : bro
   unfold BitVec.extractLsb
   simp only [Nat.sub_zero, Nat.reduceAdd]
 
-theorem zbb_rtypew_eq_ROLW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (op : bropw_zbb) :
+theorem zbb_rtypew_eq_ROLW (rs2 : regidx) (rs1 : regidx) (rd : regidx) :
     Functions.execute_ZBB_RTYPEW (rs2) (rs1) (rd) (bropw_zbb.RISCV_ROLW)
     = skeleton_binary rs2 rs1 rd (fun val1 val2 => RV64.ZBB_RTYPEW_pure64_RISCV_ROLW val2 val1 )
   := by

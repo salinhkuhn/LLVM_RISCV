@@ -1,15 +1,32 @@
-
 import SSA.Core.Tactic
 import SSA.Core.ErasedContext
 import SSA.Core.HVector
 import SSA.Core.EffectKind
 import SSA.Core.Util
-import RiscvDialect.Dialect
+import RiscvDialect.RDialect
+import SSA.Projects.InstCombine.LLVM.PrettyEDSL
+--import SSA.Projects.InstCombine.Refinement
+import SSA.Projects.InstCombine.Tactic
+import SSA.Projects.InstCombine.TacticAuto
+import SSA.Projects.InstCombine.Base
+import SSA.Projects.InstCombine.ForLean
+import Lean
+import SSA.Core.Framework
+import SSA.Core.Tactic
+import SSA.Core.Util
+import SSA.Core.MLIRSyntax.GenericParser
+import SSA.Core.MLIRSyntax.EDSL
+import SSA.Projects.InstCombine.Tactic
+import Mathlib.Tactic.Ring
+import RiscvDialect.Peephole_Optimizations.RiscVRefinement
+
 open MLIR AST in
 
--- this file contains assembly rewrites and proofs that they are semantics preserving
+open RV64
+open toRISCV
 
 
+--
 -- additional lemmas introduced for the proofs.
 
 --@[simp] --> to do: fix it
@@ -29,34 +46,175 @@ theorem get_cons_1 {A : α → Type*} {a b: α} {as : List α}
   ((e::ₕ (f ::ₕ vec)) : HVector A (a :: b :: as)).get (1 : Fin (as.length + 2)) = f := by rfl -- extracting the i succ elem is like extracting the i elem from the remaining list
 
 
--- modelled the same rewrites done on the llvm ir level in assembly
---next goal:
-  ---extract the llvm based on bitvectors
 
--- add rd rs1 rs1 <-> slli rd rs1 $1
-theorem addTwice_eq_shiftLeftOnce :
+-- Q: ask why didnt leave that generic in theframework ? because of the rfl proof ?
+-- that is doable so far for RISCV that I proof this stroger refinment property
+-- this is a peephole optimization pattern that can be pattern matched
+-- question: how to actually apply it and find it
+-- Q: ask when those entry blocks are actually nested ???'
+
+def lhs_add0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
   [RV64_com| {
   ^entry (%0: !i64 ):
-  %1 = "RV64.add" (%0, %0) : (!i64, !i64) -> (!i64)
-  "return" (%1) : (!i64) -> ()
-  }].denote =
+    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    "return" (%2) : ( !i64) -> ()
+}]
+def rhs_add0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
   [RV64_com| {
   ^entry (%0 : !i64 ):
-    %1 = "RV64.slli" (%0) { shamt = 1 : !i64 } : ( !i64) -> (!i64)
-    "return" (%1) : (!i64 ) -> ()
-}].denote := by
-  funext Γv
-  simp_peephole at Γv -- simplifies a :: in the resolve what values variables map to --> directly TV v for some variable v which gives me the valuation of the varialbe of ty in cotext T
-  simp
-  unfold RV64.RTYPE_pure64_RISCV_ADD RV64.SHIFTIOP_pure64_RISCV_SLLI
-  bv_decide
+    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    "return" (%1) : ( !i64 ) -> ()
+}]
+-- this theorem proofs that for every context if lhs and rhs are invoked with the same context the can be rewritten into eachother
+theorem peephole01 : (rhs_add0  ⊑ᵣ lhs_add0) := by
+  unfold lhs_add0 rhs_add0
+  simp_alive_meta
+  simp_alive_peephole
+  simp only [BitVec.ofInt_ofNat]
+  unfold RV64.RTYPE_pure64_RISCV_AND RV64.const_func
+  simp only [BitVec.and_eq, BitVec.and_zero, forall_const]
+  unfold RiscvInstrSeqRefines
+  rfl
 
+-- defined a simple peephole rewrite for risc-v
+def rewrite_and0 : PeepholeRewrite RV64 [.bv] .bv :=
+  { lhs:= [RV64_com| {
+  ^entry (%0: !i64 ):
+    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    "return" (%2) : ( !i64) -> ()
+}] ,
+    rhs:= [RV64_com| {
+  ^entry (%0 : !i64 ):
+    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    "return" (%1) : ( !i64 ) -> ()
+}],
+    correct :=
+    by  simp_alive_meta
+        funext Γv
+        simp_peephole at Γv
+        simp
+        unfold RV64.RTYPE_pure64_RISCV_AND RV64.const_func
+        bv_decide
+}
+-- the main example !!!!!!
+-- try to automically rewrite some peephole optimizations
+-- bellow doesn't work yet
+def ex1_rewritePeepholeAt :
+    Com RV64  (Ctxt.ofList [.bv]) .pure .bv := rewritePeepholeAt rewrite_and0 1 lhs_add0
+
+def egLhs : Com RV64 [.bv] .pure .bv :=
+  [RV64_com| {
+  ^entry (%0: !i64 ):
+    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    %4 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %5 = "RV64.and" (%0, %4) : ( !i64, !i64 ) -> (!i64)
+    "return" (%5) : ( !i64) -> ()
+}]
+
+-- goal for today have ppepholw rewritting t
+--def runRewriteOnLhs : Com RV64 [.bv] .pure .bv :=
+--(rewritePeepholeRecursively (fuel := 100) rewrite_and0 egLhs).val
+--def egRISCVLhs: Com
+  /-
+  def egLhs : Com SimpleReg [int] .pure int :=
+  Com.var (cst 0) <|
+  Com.var (add ⟨0, by simp[Ctxt.snoc]⟩ ⟨1, by simp[Ctxt.snoc]⟩) <| -- %out = %x + %c0
+  Com.var (iterate (k := 0) (⟨0, by simp[Ctxt.snoc]⟩) (
+      Com.letPure (cst 0) <|
+      Com.letPure (add ⟨0, by simp[Ctxt.snoc]⟩ ⟨1, by simp[Ctxt.snoc]⟩) -- fun x => (x + x)
+      <| Com.ret ⟨0, by simp[Ctxt.snoc]⟩
+  )) <|
+  Com.ret ⟨0, by simp[Ctxt.snoc]⟩
+  -/
+
+-- i assume this wont be optmized by the framework
+-- i need to write an enigne that rewrites on instruction level and not basic block level
+-- need help for that
+def egLHS : Com RV64 [int] .pure int :=
+  [RV64_com| {
+  ^entry (%0: !i64 ):
+    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    %4 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %5 = "RV64.and" (%0, %4) : ( !i64, !i64 ) -> (!i64)
+    "return" (%5) : ( !i64) -> ()
+}]
+
+-- add rd rs1 rs1 <-> slli rd rs1 $1
+theorem peephole02 :
+  [RV64_com| {
+  ^entry (%0 : !i64 ):
+    %1 = "RV64.slli" (%0) { shamt = 1 : !i64 } : (!i64) -> (!i64)
+    "return" (%1) : (!i64 ) -> ()
+  }]
+  ⊑ᵣ
+  [RV64_com| {
+    ^entry (%0: !i64 ):
+    %1 = "RV64.add" (%0, %0) : (!i64, !i64) -> (!i64)
+    "return" (%1) : (!i64) -> ()
+    }] := by
+    simp_alive_meta
+    simp_alive_peephole
+    simp only [BitVec.ofInt_ofNat]
+    unfold RV64.SHIFTIOP_pure64_RISCV_SLLI RV64.RTYPE_pure64_RISCV_ADD
+    unfold RiscvInstrSeqRefines
+    bv_decide
+
+def rewrite_02 : PeepholeRewrite RV64 [.bv] .bv :=
+  { lhs:= [RV64_com| {
+  ^entry (%0 : !i64 ):
+    %1 = "RV64.slli" (%0) { shamt = 1 : !i64 } : (!i64) -> (!i64)
+    "return" (%1) : (!i64 ) -> ()
+  }],
+    rhs:= [RV64_com| {
+    ^entry (%0: !i64 ):
+    %1 = "RV64.add" (%0, %0) : (!i64, !i64) -> (!i64)
+    "return" (%1) : (!i64) -> ()
+    }],
+    correct :=
+    by  simp_alive_meta
+        funext Γv
+        simp_peephole at Γv
+        simp
+        unfold RV64.SHIFTIOP_pure64_RISCV_SLLI RV64.RTYPE_pure64_RISCV_ADD
+        bv_decide
+}
+
+-- conitue writting the peephole optimizations
 
 /-  add rd rs1 rs1
     add rd rd rd
     ==
     slli rd rs1 $2
 -/
+
+def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
+{ lhs:=[RV64_com| {
+    ^entry (%0: !i64 ):
+    %1 = "RV64.add" (%0, %0) : (!i64, !i64) -> (!i64)
+    %2 = "RV64.add" (%1, %1) : (!i64, !i64) -> (!i64)
+    "return" (%2) : (!i64) -> ()
+    }],
+    rhs:= [RV64_com| {
+    ^entry (%0 : !i64 ):
+      %1 = "RV64.slli" (%0) { shamt = 2 : !i64 } : ( !i64) -> (!i64)
+      "return" (%1) : ( !i64 ) -> ()
+  }],
+    correct :=
+    by  simp_alive_meta
+        funext Γv
+        simp_peephole at Γv
+        simp
+        unfold RV64.RTYPE_pure64_RISCV_ADD  RV64.SHIFTIOP_pure64_RISCV_SLLI
+        simp
+        intro someE
+        have : 4 * someE = someE + someE + (someE + someE)  := by bv_decide
+        simp [← this]
+        bv_decide
+}
 
   theorem addFourth_eq_shiftLeftTwice :
     [RV64_com| {
@@ -79,6 +237,7 @@ theorem addTwice_eq_shiftLeftOnce :
     show @Eq (BitVec _) (e + e + (e + e)) (e <<< 2) -- used to help Lean to discover the type of the operation
     --show (e + e + (e + e)) = (e <<< 2) also works
     bv_decide
+
 
 
 /-  and rd rs1 $0
@@ -230,13 +389,6 @@ theorem RISCV64_AddSub : RISCVE_AddSub_src = RISCVE_AddSub_opt := by
   bv_decide
 
 
-/-  sub rd1 v1 $0 -- -a
-    add rd2 rd1 b -- (-a) + b
-    return rd2 -- (-a) + b
-    ==
-    sub rd b v1
--/
-
 def RISCVE_AddSub1164_src := [RV64_com| {
   ^entry (%a: !i64, %b: !i64 ):
     %v1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
@@ -343,6 +495,7 @@ theorem DCE1 :
     unfold RISCVEgDCE_src RISCVDCE_opt
     funext Γv
     simp_peephole at Γv
+
 
 
 /-

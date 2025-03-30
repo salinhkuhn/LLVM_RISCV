@@ -56,7 +56,7 @@ theorem  sign_extend_zero (w1 w2 : Nat) (h : w1 ≤ w2) :
 theorem add_set_Width_eq (x : BitVec w1) (y : BitVec w1) :
     BitVec.add x y =  x + y  := by
       simp
-      simp only [HAdd.hAdd, BitVec.setWidth_eq]
+      simp only [_dd.hAdd, BitVec.setWidth_eq]
 
 theorem add_set_Width (x : BitVec w1) (y : BitVec w2) :
     BitVec.add x y =  x + y  := by
