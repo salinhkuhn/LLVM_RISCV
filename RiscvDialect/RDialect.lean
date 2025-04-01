@@ -506,7 +506,7 @@ abbrev RV64 : Dialect where
   Op := Op -- define the avaiable operations
   Ty := Ty -- define the avaiable types
 
-open TyDenote (toType)
+
 
 @[simp, reducible]
 def Op.sig : Op → List Ty -- did the signature accroding to the execution functions above

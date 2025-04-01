@@ -8,7 +8,7 @@ name = "RiscvDialect"
 [[require]]
 name = "SSA"
 git = "https://github.com/opencompl/lean-mlir.git"
-rev = "forSarah"
+rev = "main"
 
 [[require]]
 name = "Lean_RV64D_LEAN"

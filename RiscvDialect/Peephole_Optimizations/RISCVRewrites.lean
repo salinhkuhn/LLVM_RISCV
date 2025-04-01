@@ -102,7 +102,9 @@ def rewrite_and0 : PeepholeRewrite RV64 [.bv] .bv :=
 -- try to automically rewrite some peephole optimizations
 -- bellow doesn't work yet
 def ex1_rewritePeepholeAt :
-    Com RV64  (Ctxt.ofList [.bv]) .pure .bv := rewritePeepholeAt rewrite_and0 1 lhs_add0
+    Com RV64 (Ctxt.ofList [.bv]) .pure .bv := rewritePeepholeAt rewrite_and0 1 lhs_add0
+
+
 
 def egLhs : Com RV64 [.bv] .pure .bv :=
   [RV64_com| {
@@ -114,6 +116,13 @@ def egLhs : Com RV64 [.bv] .pure .bv :=
     "return" (%5) : ( !i64) -> ()
 }]
 
+
+def ex1_rewritePeepholeRecrusivly :
+  Com RV64 [.bv] .pure .bv :=
+    (rewritePeepholeRecursivly (fuel := 100) rewrite_and0 egLHS).val
+
+def expectedRHS : Com RV64 [.bv] .pure .bv :=
+  Com.ret 
 -- goal for today have ppepholw rewritting t
 --def runRewriteOnLhs : Com RV64 [.bv] .pure .bv :=
 --(rewritePeepholeRecursively (fuel := 100) rewrite_and0 egLhs).val
@@ -237,8 +246,6 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
     show @Eq (BitVec _) (e + e + (e + e)) (e <<< 2) -- used to help Lean to discover the type of the operation
     --show (e + e + (e + e)) = (e <<< 2) also works
     bv_decide
-
-
 
 /-  and rd rs1 $0
     ==
