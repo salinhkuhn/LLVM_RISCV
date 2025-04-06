@@ -13,26 +13,14 @@ open InstCombine (LLVM)
 
 set_option Elab.async false
 
-/-
-A context refinement is a function that maps each valid RISC-V variable (a de Bruijn index in Δ with type .bv)
- to a corresponding LLVM variable (a de Bruijn index in Γ with type .bitvec 64).
--/
+-- contains some of my attempts to define context mapping. might be able to see what I've done wrong in some months
 
-
-def CtxtRefines (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
+def CtxtRefines (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RV64.Ty) : Type :=
   (Δ.Var .bv) → Γ.Var (.bitvec 64)
 
-#print CtxtRefines
 
---def V₁:= (Ctxt.Valuation.ofHVector lh_llvm)
---def V₂:= (Ctxt.Valuation.ofHVector lh_riscv)
 def LLVMCtxt := Ctxt InstCombine.Ty
 def RISCVCtxt := Ctxt toRISCV.Ty
-
-
-
---def V₁:= (Ctxt.Valuation.ofHVector lh_llvm)
---def V₂:= (Ctxt.Valuation.ofHVector lh_riscv)
 
 def toLLVM : RV64.Ty → InstCombine.Ty
   | .bv => .bitvec 64 -- keep in mind the InstCombine Ty is an otion bit vec
@@ -74,47 +62,17 @@ val_refines : ∀ (v : Γ.Var (.bitvec 64)) (x : BitVec 64), V₁ v = some x →
 -- bc the computation returns some would need have the implication that there must be a corresnding reiscv mapping
 
 /-
--- for a valuation, we need to evaluate the Lean `Type` corresponding to a `Ty`
-variable [TyDenote Ty]
-
-/-- A valuation for a context. Provide a way to evaluate every variable in a context. -/
-def Valuation (Γ : Ctxt Ty) : Type :=
-  ⦃t : Ty⦄ → Γ.Var t → (toType t)
-
-/-- A valuation for a context. Provide a way to evaluate every variable in a context. -/
-def Valuation.eval {Γ : Ctxt Ty} (VAL : Valuation Γ) ⦃t : Ty⦄ (v : Γ.Var t) : toType t :=
-    VAL v
-
-
-def evalContextRiscv (Δ : RISCVCtxt) (VAL : Valuation Δ) : List (BitVec 64) :=
-  Δ.vars.map (λ ⦃t⦄ (v : Δ.Var t) => VAL.eval v)
-
-def allVars (Δ : Ctxt toRISCV.Ty) : List (Δ.Var .bv) :=
-  (List.range Δ.length).filterMap fun i =>
-    match Δ.get? i with
-    | some .bv => some ⟨i, rfl⟩
-    | _        => none
-
- (List.range Δ.length).map fun i =>
-    ⟨i, by sorry
-    ⟩
-
-
+def allVarsFromDialect (Γ : Ctxt Ty) :=
+  (List.range Γ.length).map (fun i => ⟨i, by sorry⟩)
 -/
-
-
-
--- def allVarsFromDialect (Γ : Ctxt Ty) :=
---   (List.range Γ.length).map (fun i => ⟨i, sorry⟩)
-
 
 def allVarsRiscv (Δ : Ctxt (toRISCV.Ty)) : List (Δ.Var .bv) :=
   (List.range Δ.length).map (fun i =>
-    ⟨i, sorry⟩)
+    ⟨i, by sorry⟩)
 
 def allVarsLLVM (Γ : Ctxt (InstCombine.Ty)) : List (Γ.Var (.bitvec 64)) :=
   (List.range Γ.length).map (fun i =>
-    ⟨i, sorry⟩)
+    ⟨i,by  sorry⟩)
 
 -- type of var is a DeBruijn index meaning a nat and a proof that the nat has the correspodning type
 def evalContextRiscv (Δ : RISCVCtxt) (V₁ : Δ.Valuation) : List (BitVec 64) :=
@@ -125,9 +83,7 @@ def evalContextRiscv (Δ : RISCVCtxt) (V₁ : Δ.Valuation) : List (BitVec 64) :
 def evalContextLLVM(Γ : Ctxt (InstCombine.Ty)) (V₁ : Γ.Valuation) : List (Option (BitVec 64)) :=
   (allVarsLLVM Γ).map (@V₁ _)
 
-/-
-List (BitVec 64)
--/
+
 
 -- The french trick of converting a theorem into a definition.
 -- Grothendieck!
@@ -145,27 +101,26 @@ def convertLLVMContextToRiscv (LLVMVariables : List (Option (BitVec 64))) : List
     | none   => acc
   ) []
 
-def dialectContextTransform2 (Δ : RISCVCtxt) (Γ : LLVMCtxt) (f :RV64.Ty → LLVM.Ty ): Prop :=
-  (Ctxt.map f Δ) = Γ
+def dialectValuationTransform (Δ : RISCVCtxt) (Γ : LLVMCtxt) (V₁ : Γ.Valuation) (V₂ : Δ.Valuation): Prop :=
+  convertLLVMContextToRiscv (evalContextLLVM Γ V₁)  = (evalContextRiscv Δ V₂)
+
 /-
 def dialectValuationTransform (Δ : RISCVCtxt) (Γ : LLVMCtxt) (f :RV64.Ty → LLVM.Ty ) : Prop :=
   (Ctxt.map f Δ) = Γ ∧ Ctxt.map (Ctxt.Valuation Δ RV64TyDenote.toType) Δ
 -/
 
-def dialectValuationTransform (Δ : RISCVCtxt) (Γ : LLVMCtxt) (V₁ : Γ.Valuation) (V₂ : Δ.Valuation): Prop :=
-  convertLLVMContextToRiscv (evalContextLLVM Γ V₁)  = (evalContextRiscv Δ V₂)
+-- lemmas that helped me in proof engineering
 
+-- to tell Lean that all elements of toRISCV.Ty actually have type .bv because toRISCV Dialect only models one type.
 theorem toRISCV.Ty.isSubsingleton (t : toRISCV.Ty) : t = toRISCV.Ty.bv := by
-  cases t; rfl
+  cases t; rfl -- cases on the constructor of t and because its its only one element is follows by reflection.
+
 
 instance : Subsingleton (toRISCV.Ty) where
     allEq := by
       intros a b
       rw [toRISCV.Ty.isSubsingleton a, toRISCV.Ty.isSubsingleton b]
 
-structure contextMatch {Γ : LLVMCtxt} {Δ : RISCVCtxt} (V₁ : Γ.Valuation) (V₂ : Δ.Valuation) where
-  ctxtEq : ∀ {v₁ : Γ.Var (InstCombine.Ty.bitvec 64)} {v₂ : Δ.Var (toRISCV.Ty.bv)} (h : v₁.val = v₂.val)
-    {x : BitVec 64}, (V₁ v₁ = some x) → V₂ v₂ = x
 
 /--
 A Heterogeneous morphism of contexts.
@@ -200,379 +155,59 @@ See that this provides a lot of flexibility:
 - LLVM (Γ) can have many more variables than RISCV (Δ), which can be safely ignored.
 - Multiple RISCV variables (Δ) can map to the *same* LLVM variable (Γ).
   This is important for e.g. register allocation, because multiple physical registers at different points in program time
-  may map to the same LLVM *virtual* register.
+  may map to the same LLVM *virtual* register. --ASK
 -/
-structure contextMatchHom {Γ : LLVMCtxt} {Δ : RISCVCtxt} (VΓ : Γ.Valuation) (VΔ : Δ.Valuation) (hom : HHom Δ Γ) where
+--structure contextMatchHom {Γ : LLVMCtxt} {Δ : RISCVCtxt} (VΓ : Γ.Valuation) (VΔ : Δ.Valuation) (hom : HHom Δ Γ) where
+-- theorem_foo: (f <something complex>= y)
+-- theorem_foo': (x = <something complex>) → (f x = y)
+-- apply theorem_foo |- f <something different but equivalent to something complex> = y
+-- apply theorem_foo' |- f <something different but equivalent to something complex> = y
+--   |- <something different but equivalent to something complex> = <something complex>
+-- *Fording*: Henry ford
+-- > you can have any car color you like, as long as it's black!
+/-
+A matched context between LLVM and RISCV for arbitrary LLVM context Γ and arbitrary RISCV context Δ.
+-/
 
+-- need a valuation for both contexts and a mapping between the contexts
+structure contextMatchLLVMRISCV {Γ : LLVMCtxt} {Δ : RISCVCtxt}
+    (V₁ : Γ.Valuation) (V₂ : Δ.Valuation)
+    (hom : Δ.Var toRISCV.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64)) where
+  ctxtEq : ∀ {vΔ : Δ.Var (toRISCV.Ty.bv)} {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
+    (h : vΓ = hom vΔ) {x : BitVec 64}, (V₁ vΓ = some x) → V₂ vΔ = x
+
+theorem eq_of_contextMatch_of_eq {Γ : LLVMCtxt} {Δ : RISCVCtxt}
+    {VΓ : Ctxt.Valuation Γ}
+    {VΔ : Ctxt.Valuation Δ}
+    (hom : Δ.Var toRISCV.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64))
+    (hV : contextMatchLLVMRISCV VΓ VΔ hom)
+    (vΔ : Δ.Var toRISCV.Ty.bv) {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
+    (hv : vΓ = hom vΔ) -- maps between the indicies
+    (hVΓ : VΓ vΓ = some x) : VΔ vΔ = x := by
+    apply hV.ctxtEq -- introduce new subgoals by using that the conclusion of the goal matches and the proofing the assumptions
+    · rfl
+    · rw [← hv]; use hVΓ
 
   /- convertLLVMContextToRiscv (evalContextLLVM Γ V₁)  = (evalContextRiscv Δ V₂) -/
 
--- learned that it is for a specifc context
--- goal cases analysis on the context aka what does it mean first that context match
---- have the same lenght and whenever there is a riscv vector there must be the corresponding llvm some vecotr
-
--- ASK
 -- (V : Ctxt.Valuation [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64])
-theorem eq_of_contextMatch_of_eq_zero
-    {V₁ : Ctxt.Valuation [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64]}
-    {V₂ : Ctxt.Valuation [toRISCV.Ty.bv, toRISCV.Ty.bv]}
-    (h : contextMatch V₁ V₂)
-    (hV₁ : V₁ ⟨0, by rfl⟩ = some x) : V₂ ⟨0, rfl⟩ = x := by
-    apply h.ctxtEq (v₁ := ⟨0, by rfl⟩)
-    · rfl
-    · exact hV₁
+-- theorem eq_of_contextMatch_of_eq_zero
+--     {V₁ : Ctxt.Valuation [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64]}
+--     {V₂ : Ctxt.Valuation [toRISCV.Ty.bv, toRISCV.Ty.bv]}
+--     (h : contextMatch V₁ V₂)
+--     (hV₁ : V₁ ⟨0, by rfl⟩ = some x) : V₂ ⟨0, rfl⟩ = x := by
+--     apply h.ctxtEq (v₁ := ⟨0, by rfl⟩)
+--     · rfl
+--     · exact hV₁
 
-theorem eq_of_contextMatch_of_eq_one
-    {V₁ : Ctxt.Valuation [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64]}
-    {V₂ : Ctxt.Valuation [toRISCV.Ty.bv, toRISCV.Ty.bv]}
-    (h : contextMatch V₁ V₂)
-    (hV₁ : V₁ ⟨1, by rfl⟩ = some x) : V₂ ⟨1, rfl⟩ = x := by
-    apply h.ctxtEq (v₁ := ⟨1, by rfl⟩)
-    · rfl
-    · exact hV₁
-
-
-def riscv_add :=
-  [RV64_com| {
-    ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.add" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
-  }]
-
-theorem denote_riscv_add_eq_add (v1 v2 : BitVec 64)
-  (h1 : (V ⟨0, by rfl⟩) = v1)
-  (h2 : (V ⟨1, by rfl⟩) =  v2) :
-  riscv_add.denote V =  (v1 + v2) := by
-unfold riscv_add
-simp_peephole
-simp [HVector.getN, HVector.get]
-repeat rw [Ctxt.Var.last]
-rw [h1] -- TODO: correct normal forms and simprocs
-rw [RV64.RTYPE_pure64_RISCV_ADD]
-rw [BitVec.add_eq]
-congr
-
-def llvm_add :=
-  [llvm(64)| {
-^bb0(%X : i64, %Y : i64):
-      %v1 = llvm.add %Y, %X : i64
-      llvm.return %v1 : i64
-}]
-
-theorem denote_llvm_add_eq_add_of_eq_some_of_eq_some
-  (h1 : (V ⟨0, by rfl⟩) = some v1)
-  (h2 : (V ⟨1, by rfl⟩) = some v2) :
-  llvm_add.denote V = some (v1 + v2) := by
-unfold llvm_add
-simp_peephole
-simp [HVector.getN, HVector.get]
-rw [Ctxt.Var.last]
-rw [h2, h1]
-simp [LLVM.add] -- TODO: non-confluent simp-set.
-rw [LLVM.add?_eq]
-
-theorem denote_llvm_add_eq_none_of_eq_none_left
-  (h1 : (V ⟨0, by rfl⟩) = none) :
-  llvm_add.denote V = none := by
-unfold llvm_add
-simp_peephole
-simp [HVector.getN, HVector.get]
-rw [Ctxt.Var.last]
-rw [h1]
-simp [LLVM.add] -- TODO: non-confluent simp-set.
-
-theorem denote_llvm_add_eq_none_of_eq_none_right
-  (h2 : (V ⟨1, by rfl⟩) = none) :
-  llvm_add.denote V = none := by
-unfold llvm_add
-simp_peephole
-simp [HVector.getN, HVector.get]
-rw [Ctxt.Var.last]
-rw [h2]
-simp [LLVM.add] -- TODO: non-confluent simp-set.
-
-theorem valuation_eq_some_of_llvm_add_denote_eq_some
-  (h : llvm_add.denote V = some x) :
-    ∃ (v1 v2 : BitVec 64),
-      (V ⟨0, by rfl⟩ = some v1) ∧ (V ⟨1, by rfl⟩ = some v2) ∧ (v1 + v2 = x)  := by
-  generalize hv1? : V ⟨0, by rfl⟩ = v1?
-  generalize hv2? : V ⟨1, by rfl⟩ = v2?
-  cases v1?
-  case none =>
-    have := denote_llvm_add_eq_none_of_eq_none_left hv1?
-    rw [h] at this
-    contradiction
-  case some v1 =>
-    cases v2?
-    case none =>
-      simp
-      have := denote_llvm_add_eq_none_of_eq_none_right hv2?
-      rw [h] at this
-      contradiction
-    case some v2 =>
-      exists v1
-      exists v2
-      simp
-      have := denote_llvm_add_eq_add_of_eq_some_of_eq_some hv1? hv2?
-      rw [h] at this
-      injection this with this
-      rw [this]
-
-theorem translate_add (V₁) (V₂) (h : contextMatch V₁ V₂) : -- i know that at core both contexts map to the same values, none values are filitered out
-    ∀ x, (llvm_add.denote V₁ = some x → riscv_add.denote V₂ = x) := by
-    let ⟨val_refines⟩ := h
-    --simp_alive_meta
-    cases h1 :  (llvm_add.denote V₁) with
-    | none =>
-      intros x hx
-      simp at hx
-    | some val =>
-      intros x hx
-      injection hx with hx
-      subst hx
-      have := valuation_eq_some_of_llvm_add_denote_eq_some h1
-      obtain ⟨v1, v2, hv1, hv2, val⟩ := this
-      rw [denote_riscv_add_eq_add v1 v2] -- introduces new sub goals
-      · rw [val]
-      · -- use context match
-        apply eq_of_contextMatch_of_eq_zero h hv1
-
-      · -- use context match
-        apply eq_of_contextMatch_of_eq_one h hv2
-
--- section for implementing subtraction
-
-def riscv_sub :=
-  [RV64_com| {
-    ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.sub" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
-  }]
-
-def llvm_sub :=
-  [llvm(64)| {
-^bb0(%X : i64, %Y : i64):
-      %v1 = llvm.sub %Y, %X : i64
-      llvm.return %v1 : i64
-}]
--- why doesn't this type check --> had to refer to a specifc context
-theorem denote_llvm_sub_eq_some_of_sub_of_some_explicit (V : Ctxt.Valuation [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64])
-  (h1 : (V ⟨0, by rfl⟩) = some v1)
-  (h2 : (V ⟨1, by rfl⟩) = some v2) : llvm_sub.denote V = some (v1 + v2) := by sorry
-
-theorem denote_llvm_sub_eq_some_of_sub_some
-  (h1 : (V ⟨0, by rfl⟩) = some v1)
-  (h2 : (V ⟨1, by rfl⟩) = some v2) : llvm_sub.denote V = some (v1 - v2) := by
-  unfold llvm_sub
-  simp_peephole
-  rw [Ctxt.Var.last]
-  simp [HVector.get]
-  rw [h2,Ctxt.Var.last, h1]
-  rfl
-
-theorem denote_llvm_sub_eq_none_of_none_left
-  (h1 : (V ⟨0, by rfl⟩) = none)
-    : llvm_sub.denote V = none := by
-    unfold llvm_sub
-    simp_peephole
-    rw [Ctxt.Var.last]
-    simp [HVector.get]
-    rw [Ctxt.Var.last]
-    rw [h1]
-    rfl
-
-theorem denote_llvm_sub_eq_none_of_none_right
-  (h2 : (V ⟨1, by rfl⟩) = none)
- : llvm_sub.denote V = none := by
-  unfold llvm_sub
-  simp_peephole
-  rw [Ctxt.Var.last]
-  simp [HVector.get]
-  rw [Ctxt.Var.last]
-  rw [h2]
-  simp [LLVM.sub]
+-- theorem eq_of_contextMatch_of_eq_one
+--     {V₁ : Ctxt.Valuation [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64]}
+--     {V₂ : Ctxt.Valuation [toRISCV.Ty.bv, toRISCV.Ty.bv]}
+--     (h : contextMatch V₁ V₂)
+--     (hV₁ : V₁ ⟨1, by rfl⟩ = some x) : V₂ ⟨1, rfl⟩ = x := by
+--     apply h.ctxtEq (v₁ := ⟨1, by rfl⟩)
+--     · rfl
+--     · exact hV₁
 
 
-theorem denote_riscv_sub_eq_sub (v1 v2 : BitVec 64)
-  (h1 : (V ⟨0, by rfl⟩) = v1)
-  (h2 : (V ⟨1, by rfl⟩) =  v2) :
-  riscv_sub.denote V =  (v1 - v2) := by
-unfold riscv_sub
-simp_peephole
-simp [HVector.getN, HVector.get]
-repeat rw [Ctxt.Var.last]
-rw [h1] -- TODO: correct normal forms and simprocs
-rw [RV64.RTYPE_pure64_RISCV_SUB]
-rw [BitVec.sub_eq] -- look up this lemma
-congr
-
--- proof flow:
-  -- given this : llvm_sub.denote V₁ = some val there must be two variables such that both are some and they eval to some value x
-  -- there assuming the above I show that there must exist such two other variables : valuation_eq_some_of_llvm_sub_denoe_eq_some
-  -- showing that llvm_sub = some and via case distinction that both variables in context must be some by proofing all the none cases
-
--- idea take statement from the proof and split it up and proof sequence wise
-theorem valuation_eq_some_of_llvm_sub_denoe_eq_some  (h: llvm_sub.denote V = some x) :
-    ∃ (v1 v2 : BitVec 64), ((V ⟨0, by rfl⟩ = some v1) ∧ (V ⟨1, by rfl⟩ = some v2 ) ∧ (v1 - v2 = x) )
-  := by
-  --rw [denote_llvm_sub_eq_some_of_sub_some] at h
-  generalize hv1?:  V ⟨0, ⋯⟩ = v1?
-  generalize hv2?: V ⟨1, ⋯⟩ = v2?
-  cases v1?
-  case none =>
-    have := denote_llvm_sub_eq_none_of_none_left hv1?
-    rw [this] at h
-    contradiction
-  case some v1 =>
-    cases v2?
-    case none =>
-      have := denote_llvm_sub_eq_none_of_none_right hv2?
-      rw [this] at h
-      contradiction
-    case some v2 =>
-      exists v1
-      exists v2
-      -- careful : having the x existenitally qualified as i first did is wrong
-      simp
-      have := denote_llvm_sub_eq_some_of_sub_some hv1? hv2?
-      rw [h] at this
-      injection this with this
-      rw [this]
-      -- show that riscv subtraction is actual bitvec subtraction using the variables
-
-
-
-    -- case where v1? is none
-    -- if i just write simp it would be give me false evenought i can proof it , use other hyptoheis
-    -- use the lemma is llvm_sub denote is some it must be using the first nad 2nd variable and they are some
-
-  . -- case where v1? is some
-
-theorem translate_sub (V₁)(V₂) (h : contextMatch V₁ V₂) :
-  ∀ x, (llvm_sub.denote V₁ = some x → riscv_sub.denote V₂ = x) := by
-  intros x
-  cases h1 : llvm_sub.denote V₁ with
-  | none =>
-      intros hx
-      simp at hx
-  | some val =>
-    intros hx
-    injection hx with hx
-    subst hx
-    -- use this hyptohesis : llvm_sub.denote V₁ = some val
-    have := valuation_eq_some_of_llvm_sub_denoe_eq_some h1 --intorduces new proofs etc
-    obtain  ⟨v1, v2, hv1, hv2, val ⟩ := this
-    rw [denote_riscv_sub_eq_sub v1 v2]
-    . rw [val]
-    . sorry -- to do context match
-    . sorry -- to do context match
-
-    -- now knwoing that its some val we show that it must come from two instanciated variables
-
-def riscv_or :=
-  [RV64_com| {
-  ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.or" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
-  }]
-
-def llvm_or :=
-  [llvm(64)| {
-  ^bb0(%X : i64, %Y : i64):
-      %v1 = llvm.or %Y, %X : i64 -- handle disjoint flag
-      llvm.return %v1 : i64
-  }]
-
-
-theorem translate_or (V₁)(V₂) (h : contextMatch V₁ V₂) :
-  ∀ x, (llvm_or.denote V₁ = some x → riscv_or.denote V₂ = x) := by sorry
-
-
-def llvm_urem :=
-  [llvm(64)| {
-^bb0(%X : i64, %Y : i64):
-      %v1 = llvm.urem %Y, %X : i64
-      llvm.return %v1 : i64
-  }]
-
-def riscv_urem :=
-  [RV64_com| {
-  ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.remu" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
-  }]
-
-theorem translation_urem (V₁)(V₂) (h : contextMatch V₁ V₂) :
-  ∀ x, (llvm_urem.denote V₁ = some x → riscv_urem.denote V₂ = x) := by sorry
-
-
-
-
-
-
-
-
-
-
-theorem see_LLVM2 (V₁) (V₂) (h : ValuationRefines V₁ V₂) :
-    ∃ x, llvm_add.denote V₁ = some x → riscv_add.denote V₂ = x := by
-    let ⟨ctxtRefines, val_refines⟩ := h
-    --simp_alive_meta
-    cases h1 :  (llvm_add.denote V₁) with
-    | none => use 42
-              intro forContradiction
-              contradiction
-    | some val => use val
-                  intro h'
-                  injection h' with h''
-                  rw [←h'']
-                  --simp [HVector.get, HVector.cons_get_zero]
-                  unfold riscv_add
-                  simp_peephole
-
-                  unfold llvm_add at h1
-                  revert h1
-                  --simp_alive_meta -- TODO: remove after update
-                  simp_peephole
-
-                  intro h1
-                  simp at h1
-
-                  -- i dont know how extract the variables now , I know I can use the refinement assumptions
-                  -- i now want to extract the functions in
-                  -- given the result of llvm_add I know the variable used from the LLVM side must have been some x
-                  -- i also know the correspoding
-
-                  sorry
--- try to phrasde a generic rewrite
-
-
-theorem see_LLVM1 (V₁) (V₂) (h : ValuationRefines V₁ V₂) :
-    ∃ x, llvm_add.denote V₁ = some x → riscv_add.denote V₂ = x := by
-    let ⟨ctxtRefines, val_refines⟩ := h
-    cases h1 :  (llvm_add.denote V₁) with
-    | none => use 42
-              intro forContradiction
-              contradiction
-    | some val => use val
-                  intro h'
-                  injection h' with h''
-                  rw [←h'']
-                  --simp [HVector.get, HVector.cons_get_zero]
-                  simp_peephole
-                  unfold llvm_add at h1
-                  unfold riscv_add
-
-
-                  -- i dont know how extract the variables now , I know I can use the refinement assumptions
-                  -- i now want to extract the functions in
-                  -- given the result of llvm_add I know the variable used from the LLVM side must have been some x
-                  -- i also know the correspoding
-                  sorry
-
-/-
-have h1 : V₁ (ctxtRefines u₁) = some x₁ := ‹from earlier match›
-have h2 : V₁ (ctxtRefines u₂) = some x₂ := ‹from earlier match›
-have := val_refines u₁ x₁ h1
-have := val_refines u₂ x₂ h2
--/
+-- next goal is to define refinement for an aribtraty context but for that must first understand the existing contexts 
