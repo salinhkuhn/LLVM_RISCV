@@ -47,6 +47,8 @@ def llvm_add_poison :=
       %v1 = llvm.add %Y, %X : i64
       llvm.return %v1 : i64
 }]
+-- ASK alex how the context is built
+
 
 theorem denote_llvm_add_eq_add_of_eq_some_of_eq_some
   (h1 : (V ⟨0, by rfl⟩) = some v1)
@@ -57,7 +59,7 @@ simp_peephole
 simp [HVector.getN, HVector.get]
 rw [Ctxt.Var.last]
 rw [h2, h1]
-simp [LLVM.add] -- TODO: non-confluent simp-set.
+simp [LLVM.add] -- TODO: non-confluent simp-set. aka create a simp-set for the LLVM instructions
 rw [LLVM.add?_eq]
 
 theorem denote_llvm_add_eq_none_of_eq_none_left
@@ -129,6 +131,16 @@ def binOpHom_i_to_i (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv)
   · simp [hv0]
   · simp [hv1]⟩
 
+
+-- trying to generalize to a more general context
+
+
+
+
+
+
+
+
 -- mapping with inverted context correspondance
 -- [x1, x2] --> [%X, %Y] such that  x1.get = %Y, x2.get =%X
 def binOpHom_i_to_modi (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv) :
@@ -148,56 +160,8 @@ def binOpHom_i_to_modi (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.
   rcases this with h1 | h0
   . simp [h1]
   . simp [h0]
-   ⟩ -- proof that it is actually of the type RISCV.Ty.bv
+   ⟩ -- proof that it is actually of the type InstCombine.Ty.bv
 
--- first value is poison and not mapped to an actual value
-
-/- this establish a homomorphism defined for our use case as follows:
-    [x1, x2] --> [%X, %Y (none), %Z] such that  x1.get = %X, x2.get =%Z
--/
--- cant be handled by the llvm instructions yet bc their signature expect to only have a context of lenght 2
-
--- proof structure show that  is within the bounds of the riscv context and there given that we know the type of the context we get the correct llvm type
-def add_Hom_llvm_poison_to_riscv  (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv) : Ctxt.Var [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64] (InstCombine.Ty.bitvec 64) :=
- ⟨ 2 * vΔ.val  , by
-  have := vΔ.prop
-  have h1 : vΔ.val ≤ 1 := by
-    by_contra h1 -- assuming this holds we show that it must have the type none and therefore is contradicting our assumption
-    simp at h1
-    have hcontra : Ctxt.get? [toRISCV.Ty.bv, toRISCV.Ty.bv] vΔ.val = none := by
-      simp [Ctxt.get?]
-      omega
-    rw [hcontra] at this
-    contradiction
-  have : (2 * vΔ.val) = 0 ∨ (2 * vΔ.val) = 2 := by omega
-  rcases this with  h0 | h2
-  . rw [h0]
-    simp [Ctxt.get?]
-  . rw [h2]
-    simp [Ctxt.get?]
-  ⟩
-
-/- this establish a homomorphism defined for our use case as follows:
-    [x1, x1] --> [%X, none ] such that  x1.get = %X, x2.get =%Z
--/
-def add_Hom_llvm_poison_to_riscv_same (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv) : Ctxt.Var [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64] (InstCombine.Ty.bitvec 64) :=
-   ⟨ 2 * vΔ.val  , by
-  have := vΔ.prop
-  have h1 : vΔ.val ≤ 1 := by
-    by_contra h1 -- assuming this holds we show that it must have the type none and therefore is contradicting our assumption
-    simp at h1
-    have hcontra : Ctxt.get? [toRISCV.Ty.bv, toRISCV.Ty.bv] vΔ.val = none := by
-      simp [Ctxt.get?]
-      omega
-    rw [hcontra] at this
-    contradiction
-  have : (2 * vΔ.val) = 0 ∨ (2 * vΔ.val) = 2 := by omega
-  rcases this with  h0 | h2
-  . rw [h0]
-    simp [Ctxt.get?]
-  . rw [h2]
-    simp [Ctxt.get?]
-  ⟩
 
 theorem translate_add_straight (V₁) (V₂) (h : contextMatchLLVMRISCV V₁ V₂  binOpHom_i_to_i) : -- i know that at core both contexts map to the same values, none values are filitered out
     ∀ x, (llvm_add.denote V₁ = some x → riscv_add.denote V₂ = x) := by
@@ -257,6 +221,61 @@ theorem translate_add_reverse (V₁) (V₂) (h : contextMatchLLVMRISCV V₁ V₂
         · simp [binOpHom_i_to_modi]; rfl
         · rw [Ctxt.Var.last]; exact hv1
 
+
+
+-- trying to work with poison values
+/- this establish a homomorphism defined for our use case as follows:
+    [x1, x1] --> [%X, none ] such that  x1.get = %X, x2.get =%Z
+-/
+
+-- trying to model with a context where we have a poison value
+-- problem is here I assume a certain mapping aka give the mapping, but I want to do it more general that when there exist context of arbitrary length
+def add_Hom_llvm_poison_to_riscv_same (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv) : Ctxt.Var [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64] (InstCombine.Ty.bitvec 64) :=
+   ⟨ 2 * vΔ.val  , by
+  have := vΔ.prop
+  have h1 : vΔ.val ≤ 1 := by
+    by_contra h1 -- assuming this holds we show that it must have the type none and therefore is contradicting our assumption
+    simp at h1
+    have hcontra : Ctxt.get? [toRISCV.Ty.bv, toRISCV.Ty.bv] vΔ.val = none := by
+      simp [Ctxt.get?]
+      omega
+    rw [hcontra] at this
+    contradiction
+  have : (2 * vΔ.val) = 0 ∨ (2 * vΔ.val) = 2 := by omega
+  rcases this with  h0 | h2
+  . rw [h0]
+    simp [Ctxt.get?]
+  . rw [h2]
+    simp [Ctxt.get?]
+  ⟩
+
+-- trying to modell it for a poison value
+
+/- this establish a homomorphism defined for our use case as follows:
+    [x1, x2] --> [%X, %Y (none), %Z] such that  x1.get = %X, x2.get =%Z
+-/
+-- cant be handled by the llvm instructions yet bc their signature expect to only have a context of lenght 2
+
+-- proof structure show that  is within the bounds of the riscv context and there given that we know the type of the context we get the correct llvm type
+def add_Hom_llvm_poison_to_riscv  (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv) : Ctxt.Var [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64] (InstCombine.Ty.bitvec 64) :=
+ ⟨ 2 * vΔ.val  , by
+  have := vΔ.prop
+  have h1 : vΔ.val ≤ 1 := by
+    by_contra h1 -- assuming this holds we show that it must have the type none and therefore is contradicting our assumption
+    simp at h1
+    have hcontra : Ctxt.get? [toRISCV.Ty.bv, toRISCV.Ty.bv] vΔ.val = none := by
+      simp [Ctxt.get?]
+      omega
+    rw [hcontra] at this
+    contradiction
+  have : (2 * vΔ.val) = 0 ∨ (2 * vΔ.val) = 2 := by omega
+  rcases this with  h0 | h2
+  . rw [h0]
+    simp [Ctxt.get?]
+  . rw [h2]
+    simp [Ctxt.get?]
+  ⟩
+-- problem so far this is fixed on a context, same size to same size
 --  [x1, x2] --> [%X, %Y (none), %Z] such that  x1.get = %X, x2.get =%Z
 -- the problem of modelling this is that llvm.add anyways only requires the input context to be of length 2
 -- tried to implement it wtih a  broader context but the istruction only process a cpntexrt of fixed length
@@ -288,7 +307,6 @@ theorem translate_add_poison (V₁) (V₂) (h : contextMatchLLVMRISCV V₁ V₂ 
         · exact h
         · simp [addHom_i_to_modi]; rfl
         · rw [Ctxt.Var.last]; exact hv1
-
 
 
     -- now knwoing that its some val we show that it must come from two instanciated variables
@@ -337,6 +355,10 @@ theorem translation_urem (V₁)(V₂) (h : contextMatch V₁ V₂) :
 
 
 
+
+
+
+/-
 theorem see_LLVM2 (V₁) (V₂) (h : ValuationRefines V₁ V₂) :
     ∃ x, llvm_add.denote V₁ = some x → riscv_add.denote V₂ = x := by
     let ⟨ctxtRefines, val_refines⟩ := h
@@ -393,10 +415,10 @@ theorem see_LLVM1 (V₁) (V₂) (h : ValuationRefines V₁ V₂) :
                   -- i also know the correspoding
                   sorry
 
+-/
 /-
 have h1 : V₁ (ctxtRefines u₁) = some x₁ := ‹from earlier match›
 have h2 : V₁ (ctxtRefines u₂) = some x₂ := ‹from earlier match›
 have := val_refines u₁ x₁ h1
 have := val_refines u₂ x₂ h2
 -/
-

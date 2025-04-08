@@ -83,6 +83,15 @@ instance : Subsingleton (toRISCV.Ty) where
       rw [toRISCV.Ty.isSubsingleton a, toRISCV.Ty.isSubsingleton b]
 
 
+/--
+A Heterogeneous morphism of contexts.
+This maps variables in context `Γ` (with variables drawn from a type universe `TyΓ`)
+into variable in a context `Delta` (with variables drawn from a type universe `TyΔ`).
+We do not stipulate that a raw `HHom` is well-formed, and we allow mappings
+between different types in general.
+This is necessary to model cases such as LLVM → RISCV, where LLVM has a richer domain of values
+that includes poison, while raw RISCV registers are pure bitvectors.
+-/
 
 -- generic over the type universes
 structure HHom {TyΓ TyΔ} (Γ : Ctxt TyΓ) (Δ : Ctxt TyΔ) where
@@ -90,12 +99,38 @@ structure HHom {TyΓ TyΔ} (Γ : Ctxt TyΓ) (Δ : Ctxt TyΔ) where
   {tyΔ : TyΔ}
   toFun : Γ.Var tyΓ → Δ.Var tyΔ -- how each variable in the context TyΓ is mapped to a variable in TyΔ
 
-
+/--
+A Uniform heterogeneous morphism of contexts,
+which stipulates that the denotation of the source and target types must be equal.
+This exists to allow lifting a `Hom` into a `HHom` without forgetting that we started from a `Hom`.
+Recall that a `Hom` forces the source and target types to be equal. Hence, we remember this equality
+with `htyEq` when lifting a `Hom` into a `UniformHHom`
+-/
 structure UniformHHom {TyΓ} {TyΔ} (Γ : Ctxt TyΓ) (Δ : Ctxt TyΔ) [TyDenote TyΓ] [TyDenote TyΔ] extends HHom Γ Δ where
   htyEq : TyDenote.toType tyΓ = TyDenote.toType tyΔ
 
 
 
+/--
+We follow the yoga of categories,
+where we do not ask for context *equality*, but only for a map from context Δ into context Γ.
+See that this provides a lot of flexibility:
+- LLVM (Γ) can have many more variables than RISCV (Δ), which can be safely ignored.
+- Multiple RISCV variables (Δ) can map to the *same* LLVM variable (Γ).
+  This is important for e.g. register allocation, because multiple physical registers at different points in program time
+  may map to the same LLVM *virtual* register. --ASK
+-/
+--structure contextMatchHom {Γ : LLVMCtxt} {Δ : RISCVCtxt} (VΓ : Γ.Valuation) (VΔ : Δ.Valuation) (hom : HHom Δ Γ) where
+-- theorem_foo: (f <something complex>= y)
+-- theorem_foo': (x = <something complex>) → (f x = y)
+-- apply theorem_foo |- f <something different but equivalent to something complex> = y
+-- apply theorem_foo' |- f <something different but equivalent to something complex> = y
+--   |- <something different but equivalent to something complex> = <something complex>
+-- *Fording*: Henry ford
+-- > you can have any car color you like, as long as it's black!
+/-
+A matched context between LLVM and RISCV for arbitrary LLVM context Γ and arbitrary RISCV context Δ.
+-/
 
 -- RISC-V and LVVM specific
 
