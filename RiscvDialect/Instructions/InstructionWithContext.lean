@@ -19,12 +19,10 @@ import Std.Tactic.BVDecide
 import SSA.Core.Tactic.TacBench
 import Leanwuzla
 
--- problems bc of registers
--- proof of bitwise instruction wise translation via bit vec domain -> but with concrete input
--- idea write a libary that translate each llvm instruction one to one into riscv instruction
--- then lowert whole riscv into bit vec
+/-- this file contains explicit proofs between a llvm and riscv lowering.
+-/
 
-/-
+/- definition of refinement used in the lowerings
 abbrev Com.RefinementRiscv (src tgt : Com RV64 Γ .pure t)
     (h : RV64TyDenote.toType t = BitVec 64 := by rfl) : Prop :=
   ∀ Γv, (h ▸ src.denote Γv) ⊑ᵣ (h ▸ tgt.denote Γv) -- in they end they must yield the same register value
@@ -42,44 +40,6 @@ open InstCombine(LLVM)
 def LLVMCtxt := Ctxt InstCombine.Ty
 def RISCVCtxt := Ctxt toRISCV.Ty
 
-
---def V₁:= (Ctxt.Valuation.ofHVector lh_llvm)
---def V₂:= (Ctxt.Valuation.ofHVector lh_riscv)
-
-
-def toLLVM : RV64.Ty → InstCombine.Ty
-  | .bv => .bitvec 64 -- keep in mind the InstCombine Ty is an otion bit vec
-
--- this defines how given a riscv context, the corresponding LLVM context should look under equailty assumptions
-def RISCV_to_LLVM_should (A : Ctxt LLVM.Ty) (B : Ctxt RV64.Ty) : (Ctxt LLVM.Ty) :=
-  Ctxt.map toLLVM B
-
--- this checks that the LLVM context is exactly what the RISCV context would expect
-def contextCrossDialectEquality1 (A : Ctxt LLVM.Ty) (B : Ctxt RV64.Ty) : Prop :=
-  (RISCV_to_LLVM_should A B) = A
-
-
-
--- not sure how to implement this
-def CtxtRefinesFunc (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
-  (Δ.Var .bv) → Γ.Var (.bitvec 64) -- from bit vec to option bit vec
-
-structure ValutationRefinesEq {A : Ctxt InstCombine.Ty} {B: Ctxt RV64.Ty} (AV : A.Valuation) (BV : B.Valuation) where
-  ctxtRefines : contextCrossDialectEquality1 A B
-  f : CtxtRefinesFunc A B
-  val_refines : ∀ (v : B.Var .bv) (x : BitVec 64) , AV (f v) = some x → BV v = x
-
-/-
-def toLLVM1 : RV64.Ty → LLVM.Ty
-  | RV64.Ty.bv => LLVM.Ty.bitvec 64
--/
-/-
-def contextCrossDialectEquality1 (A : Ctxt LLVM.Ty) (B : Ctxt RV64.Ty) : Prop := --(f : Option (BitVec 64) → Bool)
-  let llvm_context := A
-  let riscv_context := B
-  let RISCV_to_LLVM := Ctxt.map ((B.Var .bv) → (A.Var (.bitvec 64))) B
-  true
--/
 
 def lh_llvm1 (rs1 rs2: BitVec 64) : (HVector TyDenote.toType [InstCombine.Ty.bitvec 64,InstCombine.Ty.bitvec 64]) :=
           HVector.cons (some (rs2)) <| HVector.cons (some (rs1)) .nil
@@ -128,9 +88,6 @@ def HVector.llvmToRiscv {ts : List InstCombine.Ty}
   h.map (fun v => Option.get! v)
 
 
-
-
-
 -- proofs that given two inputs the riscv instruction issued exactly is the same as the llvm instruction
 theorem translation_add_combined (x3 x4: BitVec 64) :
     ADD_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3 x4)) = some x →
@@ -145,9 +102,6 @@ theorem translation_add_combined (x3 x4: BitVec 64) :
     injection h with h₁
     rw [← h₁]
 
-
-#check
-#check ADD_LLVM
 
 def return_val_addL : BitVec 64 := ADD_LLVM (Ctxt.Valuation.ofHVector (lh_llvm 1 2 ))
 def return_val_addR : BitVec 64 := ADD_RV64 (Ctxt.Valuation.ofHVector (lh_riscv 1 2) )
@@ -339,26 +293,6 @@ theorem translation_urem  (x3 x4: BitVec 64) :
     simp [this]
     have : x4.toNat % x3.toNat = x.toNat := by sorry
 
-
-   -- unfold BitVec.urem
-    --simp [h₁]
-    --sorry
-/-
-have h1 (x3 x4 : BitVec 64) (assump : x3 ≠ 0#64) :
-  (if BitVec.toNat x3 = 0
-    then BitVec.toInt x4
-    else BitVec.toInt x4 % BitVec.toInt x3)
-  = BitVec.toInt x4 % BitVec.toInt x3 := by
-  simp [assump]
-
-
-
-
--/
-
-
-#check BitVec.umod
-
 def srem_LLVM_ :=
   [llvm(64)| {
 ^bb0(%X : i64, %Y : i64):
@@ -372,9 +306,7 @@ def ADD_LLVM_flags :=
          %v1 = llvm.add %X, %Y overflow<nsw> : i64
            llvm.return %v1 : i64
   }].denote
-/-
-HVector TyDenote.toType [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64]
--/
+
 #check ADD_LLVM_flags
 #check lh_llvm
 def return_val_add : Option (BitVec 64) := ADD_LLVM_flags (Ctxt.Valuation.ofHVector (lh_llvm 1 2))
@@ -569,6 +501,7 @@ def zext_LLVM_:=
       %v1 = llvm.sdiv %Y, %X : i64
       llvm.return %v1 : i64
   }].denote
+  
 -- UNSURE HOW TO HANDLE THIS
   def sext_LLVM_:=
   [llvm(64)| {

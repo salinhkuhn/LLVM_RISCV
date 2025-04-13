@@ -17,10 +17,9 @@ open Sail
 open PureFunctions
 
 /-
-proofs: pure functions executed using the skeleton <-> untouched execution semantics in the LeanRV64DLEAN
-to do: write some proof automation, tactic to do the proofs.
--/
-/-
+this file contains the foundation of my semantics and proofs that execution a riscv instruction of
+the riscv dialect has semantics defined as in the sail riscv modell.
+
 arrived at this after reverse engineering back from bit vecotr extraction
 -/
 def skeleton_binary  (rs2 : regidx) (rs1 : regidx) (rd : regidx) (execute_func : BitVec 64 → BitVec 64 → BitVec 64) : SailM Retired := do

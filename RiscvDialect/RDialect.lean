@@ -3,29 +3,13 @@ import SSA.Core.MLIRSyntax.EDSL
 set_option maxHeartbeats 1000000000000000000
 namespace RV64
 
--- Bool for indicating the sign bit
 
--- trying to model the semanitcs we have proven using the SAIL modell
--- as the reference eexecution semantics
-
--- the semantics of my pure functions, semantic preservation proven in Lean
--- Question: is there a way to do it automatically because now I am just copying it over manually
 structure mul_op where
   high : Bool
   signed_rs1 : Bool
   signed_rs2 : Bool
   deriving BEq, DecidableEq, Repr
 
-
-namespace Int
-  inductive Int : Type where
-    /-- A natural number is an integer (`0` to `∞`). -/
-    | ofNat   : Nat → Int
-    /-- The negation of the successor of a natural number is an integer
-      (`-1` to `-∞`). -/
-    | negSucc : Nat → Int
-
-end Int
 
 def ADDIW_pure64 (imm : BitVec 12) (rs1_val : BitVec 64) :  BitVec 64 :=
      BitVec.signExtend 64 (BitVec.setWidth 32 (BitVec.add (BitVec.signExtend 64 imm) rs1_val))
@@ -371,7 +355,7 @@ BitVec.signExtend 64
     (BitVec.shiftLeft rs1_val ((BitVec.extractLsb' 0 6 (BitVec.ofInt (7) (64)) - BitVec.extractLsb 5 0 rs2_val)).toNat)
 
 
-def const_func (val : BitVec 64) := val
+--def const_func (val : BitVec 64) := val
 /-
 
 
@@ -408,8 +392,10 @@ section Dialect
 
 --defining operations of my dialect
 --encoding the operations such that my input arguements are only the registers
+
+
 inductive Op
-|const (val: BitVec 64)
+|const : (val : Int) → Op -- newly added
 |addiw (imm : BitVec 12) --not sure if I should encode immediates but I dont think so
 |lui (imm : BitVec 20)
 |auipc (imm : BitVec 20)
@@ -483,13 +469,13 @@ inductive Op
 |sh1add
 |sh2add
 |sh3add -/
-deriving Inhabited, DecidableEq, Repr --ASK: DecidableEq, Repr --to be able to print as string, cmp and have default value
+deriving DecidableEq, Repr --ASK: DecidableEq, Repr --to be able to print as string, cmp and have default value
 
 --defining the MLIR types
 inductive Ty -- here belongs what my operations operate on
   | bv : Ty
   -- maybe add more in the future
-  deriving Inhabited, DecidableEq, Repr
+  deriving DecidableEq, Repr
 
 -- connecting the MLIR operations and types to their semantics
 
@@ -506,11 +492,14 @@ abbrev RV64 : Dialect where
   Op := Op -- define the avaiable operations
   Ty := Ty -- define the avaiable types
 
-
+instance : Inhabited (TyDenote.toType (t : Ty)) where
+  default := by
+    cases t
+    exact (0#64)
 
 @[simp, reducible]
 def Op.sig : Op → List Ty -- did the signature accroding to the execution functions above
-  |.const (val : BitVec 64) =>  []
+  |.const _ =>  []
   |.mulu  => [Ty.bv, Ty.bv]
   |mulh  => [Ty.bv, Ty.bv]
   |mulhu  => [Ty.bv, Ty.bv]
@@ -520,7 +509,6 @@ def Op.sig : Op → List Ty -- did the signature accroding to the execution func
   |ror => [Ty.bv, Ty.bv]
   |.remwu  => [Ty.bv, Ty.bv] -- to indicate if signed or not
   |.remu  =>  [Ty.bv, Ty.bv]
-
   |.addiw (imm : BitVec 12) => [Ty.bv] -- specifying the input argument types
   |.lui (imm : BitVec 20) => [Ty.bv] -- Ty.bv 20 as the immediate
   |.auipc (imm : BitVec 20)  => [Ty.bv] --Ty.bv 20,as the immediate
@@ -576,7 +564,7 @@ def Op.sig : Op → List Ty -- did the signature accroding to the execution func
 
 @[simp, reducible] -- reduceable means this expression can always be expanded by the type checker when type checking
 def Op.outTy : Op  → Ty --- dervied from the ouput of the execution function
-  |.const (val: BitVec 64) => Ty.bv
+  |.const _ => Ty.bv
   |.mulu  => Ty.bv
   |.mulh  => Ty.bv
   |.mulhu  => Ty.bv
@@ -654,10 +642,10 @@ instance : DialectSignature RV64 := ⟨Op.signature⟩
 
 
 -- I assume the layout is add (then all the args in the op code) (then args in the signature) ret_val
-@[simp]
+@[simp, reducible]
 instance : DialectDenote (RV64) where
   denote
-  |.const val,_,  _  => RV64.const_func val
+  |.const val,_,  _  => BitVec.ofInt 64 val
   |.addiw imm, regs, _   => RV64.ADDIW_pure64 imm (regs.getN 0 (by simp [DialectSignature.sig, signature]))
   |.lui imm,  regs , _   => RV64.UTYPE_pure64_lui imm (regs.getN 0 (by simp [DialectSignature.sig, signature]))
   |.auipc imm, regs, _  => RV64.UTYPE_pure64_AUIPC imm (regs.getN 0 (by simp [DialectSignature.sig, signature]))
@@ -722,7 +710,43 @@ instance : DialectDenote (RV64) where
   |.rorw, regs, _ => RV64.ZBB_RTYPEW_pure64_RISCV_RORW (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
   |.rol, regs, _ => RV64.ZBB_RTYPE_pure64_RISCV_ROL (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
   |.ror, regs, _ => RV64.ZBB_RTYPE_pure64_RISCV_ROR (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
+
 end Dialect
+-- for using it in rewrites to directly use com
+def const {Γ : Ctxt _} (n : ℤ) : Expr RV64 Γ .pure .bv  :=
+  Expr.mk
+    (op := toRISCV.Op.const n)
+    (eff_le := by constructor)
+    (ty_eq := rfl)
+    (args := .nil)
+    (regArgs := HVector.nil)
+-- this is to easily write IR by hand
+-- alterantive would work :: Γ.Var .bv
+def add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
+  Expr.mk
+    (op := toRISCV.Op.add)
+    (eff_le := by constructor)
+    (ty_eq := rfl)
+    (args := .cons e₁ <| .cons e₂ .nil)
+    (regArgs := HVector.nil)
+
+def sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
+  Expr.mk
+    (op := toRISCV.Op.sub)
+    (eff_le := by constructor)
+    (ty_eq := rfl)
+    (args := .cons e₁ <| .cons e₂ .nil) -- debug
+    (regArgs := HVector.nil)
+
+def and {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
+  Expr.mk
+    (op := toRISCV.Op.and)
+    (eff_le := by constructor)
+    (ty_eq := rfl)
+    (args := .cons e₁ <| .cons e₂ .nil)
+    (regArgs := HVector.nil)
+
+
 
 /-
   |.sra, regs, _  => RV64.RTYPE_pure64_RISCV_SRA (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
@@ -754,7 +778,7 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
           | .int val ty =>
             let opTy@(.bv) ← mkTy ty -- ty.mkTy
             return ⟨.pure, opTy, ⟨
-              .const (BitVec.ofInt 64 val),
+              .const (val),
               by
               simp[DialectSignature.outTy, signature]
              ,
@@ -1269,6 +1293,7 @@ def mkReturn (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) : MLIR.AST.ReaderM (RV64)
     return ⟨.pure, ty, Com.ret v⟩
   | _ => throw <| .generic s!"Ill-formed return statement (wrong arity, expected 1, got {opStx.args.length})"
   else throw <| .generic s!"Tried to build return out of non-return statement {opStx.name}"
+
 
 instance : MLIR.AST.TransformReturn (RV64) 0 where
   mkReturn := mkReturn

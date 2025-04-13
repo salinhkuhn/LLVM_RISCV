@@ -82,8 +82,6 @@ instance : Subsingleton (toRISCV.Ty) where
       intros a b
       rw [toRISCV.Ty.isSubsingleton a, toRISCV.Ty.isSubsingleton b]
 
-
-
 -- generic over the type universes
 structure HHom {TyΓ TyΔ} (Γ : Ctxt TyΓ) (Δ : Ctxt TyΔ) where
   {tyΓ : TyΓ}
@@ -93,9 +91,6 @@ structure HHom {TyΓ TyΔ} (Γ : Ctxt TyΓ) (Δ : Ctxt TyΔ) where
 
 structure UniformHHom {TyΓ} {TyΔ} (Γ : Ctxt TyΓ) (Δ : Ctxt TyΔ) [TyDenote TyΓ] [TyDenote TyΔ] extends HHom Γ Δ where
   htyEq : TyDenote.toType tyΓ = TyDenote.toType tyΔ
-
-
-
 
 -- RISC-V and LVVM specific
 
@@ -140,6 +135,45 @@ theorem eq_of_contextMatch_of_eq {Γ : LLVMCtxt} {Δ : RISCVCtxt}
 --     apply h.ctxtEq (v₁ := ⟨1, by rfl⟩)
 --     · rfl
 --     · exact hV₁
+
+
+/-
+def CtxtRefines (Γ : LLVMCtxt) (Δ : RISCVCtxt) : Type := -- defining how to the types are mapped between the two contexts
+  (Δ.Var .bv) → Γ.Var (.bitvec 64)
+
+#print CtxtRefines
+
+--def V₁:= (Ctxt.Valuation.ofHVector lh_llvm)
+--def V₂:= (Ctxt.Valuation.ofHVector lh_riscv)
+structure ValuationRefines {Γ : LLVMCtxt} {Δ : RISCVCtxt} (V₁ : Γ.Valuation) (V₂ : Δ.Valuation) where
+  ctxtRefines : CtxtRefines Γ Δ -- defining how to values should be mapped, challenge; llvm type is option bc of UB
+  val_refines : ∀ (v : Δ.Var .bv) (x : BitVec 64), V₁ (ctxtRefines v) = some x → V₂ v = x --if the llvm variable has a some value we have the riscv value given
+
+
+def toLLVM : RV64.Ty → InstCombine.Ty
+  | .bv => .bitvec 64 -- keep in mind the InstCombine Ty is an otion bit vec
+
+-- this defines how given a riscv context, the corresponding LLVM context should look under equailty assumptions
+def RISCV_to_LLVM_should (A : Ctxt LLVM.Ty) (B : Ctxt RV64.Ty) : (Ctxt LLVM.Ty) :=
+  Ctxt.map toLLVM B
+
+-- this checks that the LLVM context is exactly what the RISCV context would expect
+def contextCrossDialectEquality1 (A : Ctxt LLVM.Ty) (B : Ctxt RV64.Ty) : Prop :=
+  (RISCV_to_LLVM_should A B) = A
+
+-- not sure how to implement this
+def CtxtRefinesFunc (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
+  (Δ.Var .bv) → Γ.Var (.bitvec 64) -- from bit vec to option bit vec
+  -- how to indices of bv variable map to bitvec 64 var
+
+structure ValutationRefinesEq {A : Ctxt LLVM.Ty} {B: Ctxt RV64.Ty} (AV : A.Valuation) (BV : B.Valuation) where
+  ctxtRefines : contextCrossDialectEquality1 A B
+  f : CtxtRefinesFunc A B
+  val_refines : ∀ (v : B.Var .bv) (x : BitVec 64) , AV (f v) = some x → BV v = x
+
+-/
+
+
 
 
 -- next goal is to define refinement for an aribtraty context but for that must first understand the existing contexts

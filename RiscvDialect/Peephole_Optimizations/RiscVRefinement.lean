@@ -28,10 +28,10 @@ def RiscvInstrSeqRefines (x y : BitVec 64) : Prop := x = y
 -- target is a refinement of source
 infix:50 (priority:=low) " ⊑ᵣ" => RiscvInstrSeqRefines
 
--- technically an overkill because its equality but it looks nicer
+-- how we defined refinement of riscv level. Basically its is equality -> see: RiscvInstrSeqRefines
 abbrev Com.RefinementRiscv (src tgt : Com RV64 Γ .pure t)
     (h : RV64TyDenote.toType t = BitVec 64 := by rfl) : Prop :=
   ∀ Γv, (h ▸ src.denote Γv) ⊑ᵣ (h ▸ tgt.denote Γv) -- in they end they must yield the same register value
 
-  
+
 infixr:90 " ⊑ᵣ"  => Com.RefinementRiscv --applies this function so just an infix operator

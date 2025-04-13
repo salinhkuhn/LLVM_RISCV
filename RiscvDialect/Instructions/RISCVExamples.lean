@@ -1,5 +1,4 @@
--- goal: in this file I want to define a RISC-V dialect semantics
--- alllows me issue a sequence of myPureFunction or BitVector Operation sequence given some RISC-V assembly code.
+
 import RiscvDialect.Dialect
 import SSA.Core.Tactic
 import SSA.Core.ErasedContext
@@ -8,6 +7,9 @@ import SSA.Core.EffectKind
 import SSA.Core.Util
 
 open MLIR AST in
+
+/-- contains riscv dialect and evaultes them. Purpose was to check the semantics of my dialect and to get familar with
+ invkoing it on an IR level. -/
 
 --typing test
 def RISCVEg1 := [RV64_com| {
@@ -274,8 +276,6 @@ def RISCVEg24 := [RV64_com| {
 def lh24 : HVector TyDenote.toType [toRISCV.Ty.bv, toRISCV.Ty.bv] := HVector.cons (BitVec.ofNat 64 9) <| HVector.cons (BitVec.ofNat 64 (8)) .nil
 def test_rem : BitVec 64 := RISCVEg24.denote  (Ctxt.Valuation.ofHVector lh24)
 #eval test_rem
-
-
 
 -- document how to implement this, was hard to do it right to get the attributes correct
 -- RV64M: mul rd, rs1, rs2, signed multiplication of rs1 by rs2 and places lower bits into rd

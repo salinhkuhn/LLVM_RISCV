@@ -1,3 +1,4 @@
+
 import SSA.Core.Tactic
 import SSA.Core.ErasedContext
 import SSA.Core.HVector
@@ -19,14 +20,23 @@ import SSA.Core.MLIRSyntax.EDSL
 import SSA.Projects.InstCombine.Tactic
 import Mathlib.Tactic.Ring
 import RiscvDialect.Peephole_Optimizations.RiscVRefinement
-
+import Qq
+import Lean
+import Mathlib.Logic.Function.Iterate
+import SSA.Core.Framework
+import SSA.Core.Tactic
+import SSA.Core.Util
+import SSA.Core.MLIRSyntax.GenericParser
+import SSA.Core.MLIRSyntax.EDSL
+import SSA.Projects.InstCombine.Tactic
+import SSA.Projects.DCE.DCE
+import Mathlib.Tactic.Ring
 open MLIR AST in
 
 open RV64
 open toRISCV
+open DCE
 
-
---
 -- additional lemmas introduced for the proofs.
 
 --@[simp] --> to do: fix it
@@ -46,33 +56,25 @@ theorem get_cons_1 {A : α → Type*} {a b: α} {as : List α}
   ((e::ₕ (f ::ₕ vec)) : HVector A (a :: b :: as)).get (1 : Fin (as.length + 2)) = f := by rfl -- extracting the i succ elem is like extracting the i elem from the remaining list
 
 
-
--- Q: ask why didnt leave that generic in theframework ? because of the rfl proof ?
--- that is doable so far for RISCV that I proof this stroger refinment property
--- this is a peephole optimization pattern that can be pattern matched
--- question: how to actually apply it and find it
--- Q: ask when those entry blocks are actually nested ???'
-
-def lhs_add0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
+def lhs_and0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
   [RV64_com| {
   ^entry (%0: !i64 ):
     %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
     %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
     "return" (%2) : ( !i64) -> ()
 }]
-def rhs_add0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
+def rhs_and0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
   [RV64_com| {
   ^entry (%0 : !i64 ):
     %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
     "return" (%1) : ( !i64 ) -> ()
 }]
 -- this theorem proofs that for every context if lhs and rhs are invoked with the same context the can be rewritten into eachother
-theorem peephole01 : (rhs_add0  ⊑ᵣ lhs_add0) := by
-  unfold lhs_add0 rhs_add0
-  simp_alive_meta
+theorem peephole01 : (rhs_and0  ⊑ᵣ lhs_and0) := by
+  unfold lhs_and0 rhs_and0
   simp_alive_peephole
   simp only [BitVec.ofInt_ofNat]
-  unfold RV64.RTYPE_pure64_RISCV_AND RV64.const_func
+  unfold RV64.RTYPE_pure64_RISCV_AND
   simp only [BitVec.and_eq, BitVec.and_zero, forall_const]
   unfold RiscvInstrSeqRefines
   rfl
@@ -91,66 +93,266 @@ def rewrite_and0 : PeepholeRewrite RV64 [.bv] .bv :=
     "return" (%1) : ( !i64 ) -> ()
 }],
     correct :=
-    by  simp_alive_meta
+    by
         funext Γv
         simp_peephole at Γv
         simp
-        unfold RV64.RTYPE_pure64_RISCV_AND RV64.const_func
+        unfold RV64.RTYPE_pure64_RISCV_AND
         bv_decide
 }
--- the main example !!!!!!
--- try to automically rewrite some peephole optimizations
--- bellow doesn't work yet
-def ex1_rewritePeepholeAt :
-    Com RV64 (Ctxt.ofList [.bv]) .pure .bv := rewritePeepholeAt rewrite_and0 1 lhs_add0
+-- zero optimization
+def ex1_rewritePeepholeAtO0 :
+    Com RV64 (Ctxt.ofList [.bv]) .pure .bv := rewritePeepholeAt rewrite_and0 0 lhs_and0
+
+-- optimized code
+def ex1_rewritePeepholeAtO1 :
+    Com RV64 (Ctxt.ofList [.bv]) .pure .bv := rewritePeepholeAt rewrite_and0 1 lhs_and0
+
+
+-- defined function to return eexpressio in RDialect
+theorem ex1_rewritePeepholeAtExpectedOutcome :
+  ex1_rewritePeepholeAtO0 =   Com.var (const 0) (
+                                Com.var (and ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) -- %out = %x + %c0
+                                  (Com.ret ⟨0, by simp[Ctxt.snoc]⟩))
+:= by
+unfold ex1_rewritePeepholeAtO0
+unfold rewritePeepholeAt
+simp
+unfold rewriteAt
+simp_peephole
+native_decide
+
+-- important to remeber that rewrites insert to rhs at the last statement of the olhs and then we could run DCE
+theorem ex1_rewritePeepholeAtExpectedOutcome1 :
+  ex1_rewritePeepholeAtO1 =   Com.var (const 0) (
+                                Com.var (and ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) (
+                                  (Com.var (const 0 ))
+                                  (Com.ret ⟨0, by simp[Ctxt.snoc]⟩)))
+    := by
+    simp [ex1_rewritePeepholeAtO1]
+    native_decide
+-- found out that they will just insert the new code at the position of the last instr
+
+-- proving that after executing the rewritePeepholeAt01 its not the same anymore
+theorem rewriteDidSomething : ex1_rewritePeepholeAtO1 ≠  lhs_and0 := by
+  simp [ex1_rewritePeepholeAtO1, lhs_and0]
+  native_decide
+
+-- prove that zero optimiztion is the identity
+theorem rewriteDidSomethingDidNothing : ex1_rewritePeepholeAtO0 =  lhs_and0 := by
+  simp [ex1_rewritePeepholeAtO1, lhs_and0]
+  native_decide
+
+-- had to give a default instance and not just list but ctxt of list
+def ex12_rewritePeepholeRecrusivly :
+  Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
+    rewritePeepholeRecursively (fuel := 3) rewrite_and0 lhs_and0
+
+theorem didRecursivlyDoSomething : ex12_rewritePeepholeRecrusivly ≠ lhs_and0 := by
+  simp [ex12_rewritePeepholeRecrusivly, lhs_and0]
+  native_decide
+-- they actual code gets expanded
+theorem expectedRecursionResult : ex12_rewritePeepholeRecrusivly = Com.var (const 0) (
+                                Com.var (and ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) (
+                                  (Com.var (const 0 ))
+                                  (Com.ret ⟨0, by simp[Ctxt.snoc]⟩)))
+                                  := by
+                                  simp [ex12_rewritePeepholeRecrusivly]
+                                  native_decide
+
+-- define the righthandside and the lefthandside
+def lhs_add0 : Com RV64 [.bv] .pure .bv :=
+  [RV64_com| {
+  ^entry (%0: !i64 ):
+    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "RV64.add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    "return" (%2) : ( !i64) -> ()
+}]
+
+def rhs_add0 : Com RV64 [.bv] .pure .bv :=
+  [RV64_com| {
+  ^entry (%0 : !i64 ):
+    "return" (%0) : ( !i64 ) -> ()
+}]
+-- proof that the rewrite holds, meaning that the rhs is a refinement of the lhs
+theorem add0_peepholeRewrite : rhs_add0 ⊑ᵣ lhs_add0 := by
+  unfold lhs_add0 rhs_add0
+  simp_alive_peephole
+  unfold RV64.RTYPE_pure64_RISCV_ADD
+  unfold RiscvInstrSeqRefines
+  bv_decide
+
+-- define the peephole rewrite
+def rewrite_add0 : PeepholeRewrite RV64 [.bv] .bv :=
+  { lhs:= [RV64_com| {
+  ^entry (%0: !i64 ):
+    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "RV64.add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    "return" (%2) : ( !i64) -> ()
+}],
+    rhs:= [RV64_com| {
+  ^entry (%0 : !i64 ):
+    "return" (%0) : ( !i64 ) -> ()
+}],
+    correct :=
+    by
+        funext Γv
+        simp_peephole at Γv
+        simp
+        unfold RV64.RTYPE_pure64_RISCV_ADD
+        bv_decide
+}
 
 
 
+
+-- important to remeber : are DeBruijn indices thus the first varible added to the context will have the last index then
+-- applying the peephole rewrite
+def runRewriteExplicitOnce : Com RV64 [.bv] .pure .bv := rewritePeepholeAt rewrite_add0 1 lhs_add0
+def runRewriteExplicitNone : Com RV64 [.bv] .pure .bv := rewritePeepholeAt rewrite_add0 0 lhs_add0 -- any index not equal to one should work
+
+def expectedOptimization0 : runRewriteExplicitNone = lhs_add0 := by native_decide
+
+def expectedOptimization01 : runRewriteExplicitOnce ≠ lhs_add0 := by native_decide
+
+theorem  expectedOptimization01Program : runRewriteExplicitOnce =
+Com.var (const 0) (
+  Com.var (add ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) -- x + 0
+      (Com.ret ⟨2, by simp[Ctxt.snoc]⟩)) -- 0 where 2 refers to variable x
+   := by native_decide
+
+theorem  expectedOptimization00Program : runRewriteExplicitNone =
+Com.var (const 0) (
+  Com.var (add ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) -- x + 0
+      (Com.ret ⟨0, by simp[Ctxt.snoc]⟩)) -- 0 where 0 refers to variable x+0
+   := by
+  unfold runRewriteExplicitNone rewritePeepholeAt
+  unfold rewriteAt
+  simp_peephole
+  native_decide
+
+def applyDCE1 : Com RV64 [.bv] .pure .bv :=
+  (DCE.dce' runRewriteExplicitOnce)
+
+def applyDCE2 : Com RV64 [.bv] .pure .bv :=
+  (DCE.dce' runRewriteExplicitNone)
+
+-- applies dead code elimination once and now can apply a second time until reach a fixed point ?
+-- this eliminated the first add
+theorem expectedDCECorrect : applyDCE1 = Com.var (const 0) (Com.ret (⟨1, by simp [Ctxt.snoc] ⟩ )) :=
+  by native_decide
+
+def dceCode : Com RV64 [.bv] .pure .bv := Com.var (const 0) (Com.ret (⟨1, by simp [Ctxt.snoc] ⟩ ))
+
+
+
+def comSize{Γ : List Ty} (com: Com RV64 Γ .pure .bv ) : Nat :=
+  match com with
+  |Com.ret _ => 1
+  |Com.var _ c' => 1 + comSize c'
+
+-- make type annotations for Lean
+-- after running dce twice
+theorem runDCEagain : DCE.dce' dceCode  =( Com.ret ⟨0 , by simp [Ctxt.snoc]⟩ : Com RV64 [.bv] .pure .bv ) := by native_decide
+
+def recRunner (current : Com RV64 [.bv] .pure .bv) (before : Com RV64 [.bv] .pure .bv) (fuel : Nat) : Com RV64 [.bv] .pure .bv :=
+  if h : (current == before) ∨ (fuel ≤ 0) then current
+  else
+    let newCode := (DCE.dce' current).val
+    recRunner newCode current (fuel-1)
+
+-- DCE applier
+def  exhaustivlyDCE (comBefore :  Com RV64 [.bv] .pure .bv ) : Com RV64 [.bv] .pure .bv :=
+  recRunner (comBefore ) ((DCE.dce' comBefore).val)  (comSize comBefore) -- run DCE size of Com step bc at max we eliminate all lines
+
+
+def appliedDCE : Com RV64 [.bv] .pure .bv := exhaustivlyDCE runRewriteExplicitOnce
+
+theorem dce_runner_applied_exhaustivly : appliedDCE =  Com.ret (⟨0, by simp [Ctxt.snoc] ⟩ )
+:= by native_decide -- worked aka dead code elimination was applied recurisvly
+
+-- test to check wether the DCE works
+def redunantCom : Com RV64 [.bv] .pure .bv :=
+Com.var (const 5) (Com.var (const 4) (Com.var (const 3) (Com.var (const 2) (Com.ret ⟨0, by simp [Ctxt.snoc] ⟩ ))))
+
+theorem applyDCE3 :
+  (exhaustivlyDCE redunantCom) =  (Com.var (const 2) (Com.ret ⟨0, by simp [Ctxt.snoc] ⟩ )) := by native_decide
+
+
+
+-- this will run the dce until it reaches a fixed point
+theorem DCEonUnoptimizedCode : applyDCE2 = Com.var (const 0) (
+  Com.var (add ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) -- x + 0
+      (Com.ret ⟨0, by simp[Ctxt.snoc]⟩)) := by native_decide
+
+
+-- try to fully optimize this code
 def egLhs : Com RV64 [.bv] .pure .bv :=
   [RV64_com| {
   ^entry (%0: !i64 ):
     %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    %2 = "RV64.add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
     %4 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
     %5 = "RV64.and" (%0, %4) : ( !i64, !i64 ) -> (!i64)
     "return" (%5) : ( !i64) -> ()
 }]
 
 
-def ex1_rewritePeepholeRecrusivly :
-  Com RV64 [.bv] .pure .bv :=
-    (rewritePeepholeRecursivly (fuel := 100) rewrite_and0 egLHS).val
-
-def expectedRHS : Com RV64 [.bv] .pure .bv :=
-  Com.ret 
--- goal for today have ppepholw rewritting t
---def runRewriteOnLhs : Com RV64 [.bv] .pure .bv :=
---(rewritePeepholeRecursively (fuel := 100) rewrite_and0 egLhs).val
---def egRISCVLhs: Com
-  /-
-  def egLhs : Com SimpleReg [int] .pure int :=
-  Com.var (cst 0) <|
-  Com.var (add ⟨0, by simp[Ctxt.snoc]⟩ ⟨1, by simp[Ctxt.snoc]⟩) <| -- %out = %x + %c0
-  Com.var (iterate (k := 0) (⟨0, by simp[Ctxt.snoc]⟩) (
-      Com.letPure (cst 0) <|
-      Com.letPure (add ⟨0, by simp[Ctxt.snoc]⟩ ⟨1, by simp[Ctxt.snoc]⟩) -- fun x => (x + x)
-      <| Com.ret ⟨0, by simp[Ctxt.snoc]⟩
-  )) <|
-  Com.ret ⟨0, by simp[Ctxt.snoc]⟩
-  -/
-
--- i assume this wont be optmized by the framework
--- i need to write an enigne that rewrites on instruction level and not basic block level
--- need help for that
-def egLHS : Com RV64 [int] .pure int :=
+def egLhs2 : Com RV64 [.bv] .pure .bv :=
   [RV64_com| {
   ^entry (%0: !i64 ):
-    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    --%1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+   -- %2 = "RV64.add" (%0, %0) : ( !i64, !i64 ) -> (!i64)
     %4 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
     %5 = "RV64.and" (%0, %4) : ( !i64, !i64 ) -> (!i64)
     "return" (%5) : ( !i64) -> ()
 }]
+def egLhs_rewritePeepholeRecrusivly :
+  Com RV64 [.bv] .pure .bv :=
+    rewritePeepholeRecursively (fuel := 100) rewrite_and0 egLhs
+
+def egLhs_rewritePeepholeRecrusivly2 :
+  Com RV64 [.bv] .pure .bv :=
+    rewritePeepholeRecursively (fuel := 1000) rewrite_and0 egLhs2
+
+
+-- TO DO 
+
+/-
+-- ASK how the patter matcher works bc I think its exactly mathes the patterns linear and cannot cope with an instruction in between
+def checkRewriteWasAsExpectedRec2 : egLhs_rewritePeepholeRecrusivly =Com.var (add ⟨0, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) (Com.var (const 0 ) (Com.var (and ⟨2, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩ ) (Com.var (const 0) (Com.ret ⟨0, by simp[Ctxt.snoc]⟩))))
+:= by native_decide
+-/
+
+def checkRewriteWasAsExpectedRec : egLhs_rewritePeepholeRecrusivly2 =   (Com.var (const 0 ) (Com.var (and ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩ ) (Com.var (const 0) (Com.ret ⟨0, by simp[Ctxt.snoc]⟩))))
+:= by native_decide
+
+-- works when we explcitly state the position to rewrite
+def egLhs_rewritePeepholeRecrusivly3 :
+  Com RV64 [.bv] .pure .bv :=
+    rewritePeepholeAt rewrite_and0 2 egLhs2
+def egLhs_rewritePeepholeRecrusivly4 :
+  Com RV64 [.bv] .pure .bv :=
+    rewritePeepholeAt  rewrite_and0 3 egLhs
+
+/-
+-- these cases work where we explicitly state where to rewrite, when calling recurison the optimization doesnt work yet.
+def checkRewriteWasAsExpected2 : egLhs_rewritePeepholeRecrusivly3 =Com.var (add ⟨0, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) (Com.var (const 0 ) (Com.var (and ⟨2, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩ ) (Com.var (const 0) (Com.ret ⟨0, by simp[Ctxt.snoc]⟩))))
+:= by native_decide
+
+
+def runDCEonTop :  exhaustivlyDCE egLhs_rewritePeepholeRecrusivly3 = (Com.var (const 0) (Com.ret ⟨0, by simp[Ctxt.snoc]⟩)) := by native_decide
+
+-/
+def checkRewriteWasAsExpected : egLhs_rewritePeepholeRecrusivly4 = Com.var  (const 0) ((Com.var (add ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) (Com.var (const 0 ) (Com.var (and ⟨3, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩ ) (Com.var (const 0) (Com.ret ⟨0, by simp[Ctxt.snoc]⟩))))))
+:= by native_decide
+
+
+
+
+
+
+
 
 -- add rd rs1 rs1 <-> slli rd rs1 $1
 theorem peephole02 :
@@ -165,7 +367,6 @@ theorem peephole02 :
     %1 = "RV64.add" (%0, %0) : (!i64, !i64) -> (!i64)
     "return" (%1) : (!i64) -> ()
     }] := by
-    simp_alive_meta
     simp_alive_peephole
     simp only [BitVec.ofInt_ofNat]
     unfold RV64.SHIFTIOP_pure64_RISCV_SLLI RV64.RTYPE_pure64_RISCV_ADD
@@ -184,7 +385,7 @@ def rewrite_02 : PeepholeRewrite RV64 [.bv] .bv :=
     "return" (%1) : (!i64) -> ()
     }],
     correct :=
-    by  simp_alive_meta
+    by
         funext Γv
         simp_peephole at Γv
         simp
@@ -213,7 +414,7 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       "return" (%1) : ( !i64 ) -> ()
   }],
     correct :=
-    by  simp_alive_meta
+    by
         funext Γv
         simp_peephole at Γv
         simp
@@ -266,7 +467,7 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       funext Γv
       simp_peephole at Γv
       simp
-      unfold RV64.RTYPE_pure64_RISCV_AND RV64.const_func
+      unfold RV64.RTYPE_pure64_RISCV_AND
       bv_decide
 
 /-  mul rd rs1 $1
@@ -288,7 +489,7 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       funext Γv
       simp_peephole at Γv
       simp
-      unfold RV64.MUL_pure64_fff RV64.SHIFTIOP_pure64_RISCV_SLLI RV64.const_func
+      unfold RV64.MUL_pure64_fff RV64.SHIFTIOP_pure64_RISCV_SLLI
       intro e
       show @Eq (BitVec _) _ _
       simp [get_cons_1]
@@ -345,7 +546,7 @@ theorem xor_eq_zero :
   funext Γv
   simp_peephole at Γv
   intro e
-  unfold RV64.RTYPE_pure64_RISCV_XOR RV64.const_func
+  unfold RV64.RTYPE_pure64_RISCV_XOR
   rw[HVector.cons_get_zero]
   show @Eq (BitVec 64) _ _
   bv_decide
@@ -416,7 +617,7 @@ theorem RISCV64_AddSub1164 :
   funext Γv
   simp_peephole at Γv
   intro e1 e2
-  unfold RV64.RTYPE_pure64_RISCV_ADD RV64.RTYPE_pure64_RISCV_SUB RV64.const_func
+  unfold RV64.RTYPE_pure64_RISCV_ADD RV64.RTYPE_pure64_RISCV_SUB
   simp [HVector.cons_get_zero]
   bv_decide
 
@@ -449,7 +650,7 @@ theorem RISCV64_AddSub1164_2 :
   funext Γv
   simp_peephole at Γv
   intro e1 e2
-  unfold RV64.RTYPE_pure64_RISCV_SUB RV64.const_func RV64.RTYPE_pure64_RISCV_ADD
+  unfold RV64.RTYPE_pure64_RISCV_SUB RV64.RTYPE_pure64_RISCV_ADD
   simp [HVector.cons_get_zero]
   show @Eq (BitVec 64) _ _
   bv_decide
@@ -478,7 +679,7 @@ theorem RV64_DivRemOfSelect :
   simp_peephole at Γv
   simp
   intro e1 e2
-  unfold RV64.ZICOND_RTYPE_pure64_RISCV_RISCV_CZERO_NEZ RV64.const_func RV64.DIV_pure64_unsigned
+  unfold RV64.ZICOND_RTYPE_pure64_RISCV_RISCV_CZERO_NEZ RV64.DIV_pure64_unsigned
   simp only [Nat.sub_zero, Nat.reduceAdd, BitVec.zero_eq, ↓reduceIte, BitVec.extractLsb_toNat,
     Nat.shiftRight_zero, Nat.reducePow, Int.ofNat_eq_coe, Int.ofNat_emod, Nat.cast_ofNat,
     Int.reduceNeg, Int.ofNat_toNat]

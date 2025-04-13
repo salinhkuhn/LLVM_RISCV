@@ -8,11 +8,21 @@ import SSA.Projects.InstCombine.TacticAuto
 import SSA.Projects.InstCombine.Base
 import SSA.Projects.InstCombine.ForLean
 import Lean
-
 open toRISCV -- the riscv dialect
 open InstCombine (LLVM)
 
 set_option Elab.async false
+
+/-
+contains the proof of the llvm-riscv add instruction lowering fixed for a context of length 2.
+to formalize the proof many additionally lemmas where proven to establish the statement:
+
+∀ x, (llvm_add.denote V₁ = some x → riscv_add.denote V₂ = x)
+
+the proof for an arbitrary context still needs to done in the future as soon as the instruction lowering is formlaized.
+
+-/
+
 
 def riscv_add :=
   [RV64_com| {
