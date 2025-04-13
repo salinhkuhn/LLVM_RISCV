@@ -683,7 +683,7 @@ instance : DialectDenote (RV64) where
   |.mulhsu ,regs, _ => RV64.MUL_pure64_ttf (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
   |.mulh,regs, _ => RV64.MUL_pure64_ttt (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
   |.mulw,  regs, _ => RV64.MULW_pure64 (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature])) -- double check
-  |.div, regs, _  =>  RV64.DIV_pure64_signed (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
+  |.div, regs, _  =>  RV64.DIV_pure64_signed (regs.getN 1 (by simp [DialectSignature.sig, signature]))  (regs.getN 0 (by simp [DialectSignature.sig, signature]))
   |.divu,  regs, _ =>  RV64.DIV_pure64_unsigned (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
   |.divw, regs, _  =>  RV64.DIVW_pure64_signed (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
   |.divwu, regs, _ =>  RV64.DIVW_pure64_unsigned (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))

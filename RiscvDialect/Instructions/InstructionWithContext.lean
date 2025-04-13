@@ -283,6 +283,7 @@ theorem translation_urem  (x3 x4: BitVec 64) :
   unfold RV64.REM_pure64_unsigned lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
   simp [Ctxt.Valuation.ofHVector]
+  native_decide 
   intro h
   split at h
   · contradiction
@@ -501,7 +502,7 @@ def zext_LLVM_:=
       %v1 = llvm.sdiv %Y, %X : i64
       llvm.return %v1 : i64
   }].denote
-  
+
 -- UNSURE HOW TO HANDLE THIS
   def sext_LLVM_:=
   [llvm(64)| {
