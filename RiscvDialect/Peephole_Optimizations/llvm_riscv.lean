@@ -6,11 +6,10 @@ import SSA.Projects.InstCombine.ForStd
 import SSA.Projects.InstCombine.LLVM.Semantics
 open LLVM
 
-/-- this file is stil in progress and tried to modell riscv and llvm within one context.
+/- - this file is stil in progress and tried to modell riscv and llvm within one context.
 Didnt continue implementing this so far.-/
 
 namespace riscv.semantics
-
 
 def RTYPE_pure64_RISCV_ADD (rs2_val : BitVec 64) (rs1_val : BitVec 64) :BitVec 64 :=
       BitVec.add rs1_val rs2_val
@@ -140,26 +139,19 @@ elab "[_| " reg:mlir_region "]" : term => do
 
 end llvm.riscv
 
-
 open llvm.semantics
 open llvm.riscv
 
+/- instead of lowering implemented by myself implement a lowering using the peephole rewriter and extend the rewriter to
+work with refinements
+-/
 
-def exampleLLVM : Com llvm.riscv [.opt64] .pure .opt64 :=
+def exampleLLVM  :=
 [_|{
   ^entry (%0: !i64 ):
   %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
   "return" (%1) : ( !i64) -> ()
 }]
-
--- why doesnt it work over a generic list
-def exampleLLVMg {Γ : List llvm.riscv.Ty } : Com llvm.riscv Γ .pure .opt64 :=
-[_|{
-  ^entry (%0: !i64 ):
-  %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
-  "return" (%1) : ( !i64) -> ()
-}]
-
 
 def exampleRiscv : Com llvm.riscv [.bv64] .pure .bv64 :=
 [_| {
@@ -168,17 +160,62 @@ def exampleRiscv : Com llvm.riscv [.bv64] .pure .bv64 :=
   "return" (%1) : ( !r64) -> ()
 }]
 
--- try to modell it as a rewrite but then have the problem of the denotation
+
+ def LLVMCtxtToRV (Γ : Ctxt llvm.riscv.Ty) : Ctxt llvm.riscv.Ty :=
+  List.replicate Γ.length (.bv64)
+
+
+/--TO DO: ask for a shorter proof.-/
+
+/-
+    simp [LLVMCtxtToRV]
+    have hcontra2 : Γ.get? i = some (InstCombine.Ty.bitvec 64) := by exact h
+    have hcontra3: List.length Γ ≤ i → Γ.get? i  = none := by simp [List.get?]
+    have hcontra : i <  Γ.length :=  by
+      by_contra h
+      simp at h
+      have h_none : Γ.get? i = none := hcontra3 h
+      rw [hcontra2] at h_none
+      contradiction
+    have leng_eq_leng : i < List.length Γ → i < List.length (List.replicate (List.length Γ) Ty.bv) := by simp
+    have h3 : i < (List.replicate (List.length Γ) Ty.bv).length := by exact leng_eq_leng hcontra
+    have h4 : (List.replicate (List.length Γ) Ty.bv)[i] = Ty.bv → (List.replicate (List.length Γ) Ty.bv)[i]? = some Ty.bv := by
+        simp [List.get?_eq_some]
+        exact hcontra
+    apply h4
+    rfl
 
 
 
 
+
+-/
+
+def LLVMVarToRV : Γ.Var (.opt64) → (LLVMCtxtToRV Γ).Var .bv64
+  | ⟨i, h⟩ =>  ⟨i, by
+  simp [LLVMCtxtToRV]
+  have hcontra2 : Γ.get? i = some (.opt64) := by exact h
+  have hcontra3: List.length Γ ≤ i → Γ.get? i  = none := by simp [List.get?]
+  have hcontra : i <  Γ.length :=  by
+      by_contra h
+      simp at h
+      have h_none : Γ.get? i = none := hcontra3 h
+      rw [hcontra2] at h_none
+      contradiction
+  have leng_eq_leng : i < List.length Γ → i < List.length (List.replicate (List.length Γ) Ty.bv64) := by simp
+  have h3 : i < (List.replicate (List.length Γ) Ty.bv64).length := by exact leng_eq_leng hcontra
+  have h4 : (List.replicate (List.length Γ) Ty.bv64)[i] = Ty.bv64 → (List.replicate (List.length Γ) Ty.bv64)[i]? = some Ty.bv64 := by
+        simp [List.get?_eq_some]
+        exact hcontra
+  apply h4
+  simp
+  ⟩
 
 -- do I need to establish a context mapping or exetend the context Γ
-def instruction (e : Expr llvm.riscv Γ .pure .opt64) :  Expr llvm.riscv Γ .pure .bv64 :=
+def lowerSimpleIRInstructionDialect (e : Expr llvm.riscv Γ .pure .opt64) :  Expr llvm.riscv (LLVMCtxtToRV Γ) .pure .bv64 :=
   match e with
   | Expr.mk
-    (.llvm.add)
+    (.llvm.add flags)
     (_)
     (_)
     (.cons e₁ <| .cons e₂ <| .nil ) -- are of type .opt64 which are option bitvector -> can either extract them and add them to the context but then need to know
@@ -186,20 +223,47 @@ def instruction (e : Expr llvm.riscv Γ .pure .opt64) :  Expr llvm.riscv Γ .pur
     (op := .riscv.add)
     (eff_le := by constructor)
     (ty_eq := rfl)
-    (args := .cons e₁ <| .cons e₂ <| .nil  )
+    (args := .cons  (LLVMVarToRV e₁) <| .cons  (LLVMVarToRV e₂) <| .nil  )
     (regArgs := .nil)
-  | e  => e -- still wrong type
-
--- approach:
-  -- lower it via transforming the expressions
-  -- lower it via modelling the translation as rewrites
+  --|e  =>   -- still wrong type
 
 
--- either let them be in the same context and add the riscv version of the varible to the context but then there is the issue of
--- how do I know which value it has (aka the llvm context would then get eleminated i guess)
-def lowering {Γ Δ : Ctxt Ty} (com : Com llvm.riscv Γ .pure .opt64)(fuel : Nat) :  Com llvm.riscv Δ .pure .bv64  :=
-  match com with
-  | Com.ret x  =>  Com.ret x -- do I now need to know the valuation ? -- extract the variable and add it to the riscv context and then return that
-  | Com.var (e) c' =>
-  let e' := (instruction e)
-  Com.var (e') (lowering c' (fuel - 1))
+def loweringLLVMtoRISCV : {Γ : Ctxt llvm.riscv.Ty} → (com : Com llvm.riscv Γ .pure (.opt64)) → Option (Com llvm.riscv (LLVMCtxtToRV Γ)  .pure (.bv64))
+  | _, Com.ret x  =>  some (Com.ret (LLVMVarToRV x))
+  | _, Com.var (α := llvm.riscv.Ty.opt64) e c' =>
+        let e' := (lowerSimpleIRInstructionDialect e) -- map the expression to a riscv expression
+        match loweringLLVMtoRISCV c' with
+        | some com => some (Com.var (e') (com))
+        | none => none
+  | _, Com.var (α := llvm.riscv.Ty.bv64) e1 e2 => none --, shoulnt call the lowering on itself some (Com.var (α := llvm.riscv.Ty.bv64) e1 e2) ---
+
+def exampleLLVM1 : Com llvm.riscv (Ctxt.ofList [.opt64]) .pure .opt64 :=
+[_|{
+  ^entry (%0: !i64 ):
+  %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
+  "return" (%1) : ( !i64) -> ()
+}]
+
+def exampleRiscv1 : Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .bv64 :=
+[_| {
+  ^entry (%0: !r64 ):
+  %1 = "add" (%0, %0) : (!r64, !r64 ) -> (!r64)
+  "return" (%1) : ( !r64) -> ()
+}]
+
+
+-- problem of the peephole rewriter that he doesnt support refinements
+def loweringViaRewriter :  PeepholeRewrite llvm.riscv ([Ty.opt64]) .bv64 :=
+ { lhs := [_| {
+  ^entry (%0: !i64 ):
+  %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
+  "return" (%1) : ( !i64) -> ()
+}], rhs:=
+[_| {
+  ^entry (%0: !r64 ):
+  %1 = "add" (%0, %0) : (!r64, !r64 ) -> (!r64)
+  "return" (%1) : ( !r64) -> ()
+}], correct := by sorry }
+
+
+def testAddLowering : loweringLLVMtoRISCV exampleLLVM1 = some (exampleRiscv1) := by native_decide

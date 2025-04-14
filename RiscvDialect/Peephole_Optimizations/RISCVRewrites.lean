@@ -316,7 +316,14 @@ def egLhs_rewritePeepholeRecrusivly2 :
     rewritePeepholeRecursively (fuel := 1000) rewrite_and0 egLhs2
 
 
--- TO DO 
+-- TO DO
+
+
+
+
+
+
+
 
 /-
 -- ASK how the patter matcher works bc I think its exactly mathes the patterns linear and cannot cope with an instruction in between

@@ -48,6 +48,8 @@ def LLVMVarToRV : Γ.Var (.bitvec 64) → (LLVMCtxtToRV Γ).Var .bv
    ⟩
 
 
+
+
 /- - skipped so far:
 LLVM MLIR copy instruction just returns a copy of the element ? -> ask what this instruction does, like why do we have it since its anyways SSA ?
 
@@ -71,6 +73,8 @@ def Com.ofExpr : Expr d Γ eff t → Com d Γ eff t := fun e =>
 
 -- LLVM INSTRUCTION MAPPING TO RISCV: ONE-TO-ONE
 -- this works if these are single instruction level mappings
+
+-- how to proof this :: for all instructions th
 
 def lowerSimpleIRInstruction  (e : Expr LLVM Γ .pure (.bitvec 64)) :  Expr RV64 (LLVMCtxtToRV Γ) .pure (.bv)  :=
 match e with
@@ -124,16 +128,59 @@ match e with
   |e => Expr.mk (toRISCV.Op.const 0) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil)
 -- !!!!!! check operator order in llvm vs riscv not modelled the same espeically for div and rem etc.
 
+#check Ctxt.Hom
+
+#check Ctxt.snoc
+#check Ctxt.Hom.snocMap
+
+-- Γ ++ Δ = Γ.snoc Δ₀ |>.snoc Δ₁ ...
+#check Ctxt.Var
+
 /- -TO DO: implement prepending of one computation onto antoher computation
 this function preprends a computation onto another computation => to do : think of how to do this -/
 variable {d : Dialect} [DialectSignature d] in
 def Com.prependCom (e : Com d Γ eff α) (body : Com d (Γ.snoc α) eff β) : Com d Γ eff β :=
-  sorry
+  go .id e
+where
+  go {Δ} (f : Γ.Hom Δ) : Com d Δ eff α → Com d Δ eff β
+    | Com.var e' body' => Com.var e' (go (f.snocRight) body')
+    | Com.ret returnVar =>
+        -- Δ = Γ ++ ...
+        body.changeVars fun t v =>
+          by
+            cases v
+            next v => exact f v
+            next   => exact returnVar
+
+#check Com.var
+#check Com.changeVars
 
 variable {d : Dialect} [DialectSignature d] in
-def Com.prependCom (e : Com d Γ eff α) (body : Com d (Γ.snoc α) eff β) : Com d Γ eff β :=
-  sorry
+def Com.prependCom2 (e : Com d Γ eff α) (body : Com d (Γ.snoc α) eff β) : Com d Γ eff β :=
+  /-
+  check its size , extend the context-/
+  let diff :=  e.size -- this will be the diffrence in the context between init and out -> gives us how many let bindings need to be traverrsed
+  -- need to shift all the variables at the point where e then is executed by certain amount
+  let eOutContext := e.outContext
+  go e
+  where
+  go : Com d _ eff α → Com d _ eff β
+  | Com.var expr (Com.ret _) => Com.var expr (body) -- also not sure if the context is to long here now
+  | Com.var expr (nonret) => Com.var expr (go nonret)
+  |_ => sorry
 
+/- the still need to shift the indicies -/
+  /-
+    travers the com until the return statement, replace the return statement with the body ?
+ -/
+
+
+
+
+/-
+need to find the return statement and insert there
+then need to move the indexes of all the variables that will be added to the context afterwards by size of the computation of e
+-/
 
 /--- LLVM INSTRUCTIONS THAT MAP TO MANY RISCV INSTRUCTION
 -- the purpose of this function is account for one to many lowerings where to mapping is not trivial. -/
@@ -171,7 +218,6 @@ def loweringLLVMtoRISCV : {Γ : Ctxt LLVM.Ty} → (com : Com LLVM Γ .pure (.bit
   | _, Com.var (α := InstCombine.Ty.bitvec _) _ _ =>
       none
 
-
 def isOneToOne (expr : Expr LLVM Γ .pure (.bitvec 64)) :=
   match expr.op  with
   | InstCombine.Op.neg 64 => false
@@ -201,7 +247,6 @@ def loweringLLVMtoRISCVextended : {Γ : Ctxt LLVM.Ty} → (com : Com LLVM Γ .pu
       none
 
 -- bellow are examples to check my lowerings
-
 def llvm_const :=
     [llvm(64)| {
 ^bb0(%X : i64, %Y : i64):
@@ -394,6 +439,29 @@ def riscv_const_add :=
     "return" (%v2) : (!i64, !i64) -> ()
   }]
 
+
+
+
+def realLLVMexample :=
+    --llvm.func local_unnamed_addr @add_64(%arg0: i64 {llvm.noundef}, %arg1: i64 {llvm.noundef}) -> i64 attributes {frame_pointer = #llvm.framePointerKind<"non-leaf">, memory = #llvm.memory_effects<other = none, argMem = none, inaccessibleMem = none>, no_unwind, passthrough = ["mustprogress", "nofree", "norecurse", "nosync", "ssp", ["uwtable", "1"], ["no-trapping-math", "true"], ["stack-protector-buffer-size", "8"], ["target-cpu", "apple-m1"]], target_cpu = "apple-m1", target_features = #llvm.target_features<["+aes", "+altnzcv", "+ccdp", "+ccidx", "+complxnum", "+crc", "+dit", "+dotprod", "+flagm", "+fp-armv8", "+fp16fml", "+fptoint", "+fullfp16", "+jsconv", "+lse", "+neon", "+pauth", "+perfmon", "+predres", "+ras", "+rcpc", "+rdm", "+sb", "+sha2", "+sha3", "+specrestrict", "+ssbs", "+v8.1a", "+v8.2a", "+v8.3a", "+v8.4a", "+v8a", "+zcm", "+zcz"]>, will_return} {
+    [llvm(64)| {
+      ^bb0 (%arg0: i64 , %arg1: i64):
+    %0 = llvm.add %arg1, %arg0 overflow<nsw> : i64
+    llvm.return %0 : i64
+    }]
+
+def realRISCVadd :=
+  [RV64_com| {
+    ^entry (%X: !i64, %Y: !i64):
+    %v1 = "RV64.add" (%Y, %X) : (!i64, !i64) -> (!i64)
+    "return" (%v1) : (!i64, !i64) -> ()
+  }]
+
+
+def loweringrealLLVMexample :  loweringLLVMtoRISCV realLLVMexample = some (realRISCVadd) := by native_decide
+
+
+
 -- TEST LOWERINGS FOR THE ONE TO ONE LOWERING
 --def loweringLLVMNegAsExpected :  loweringLLVMtoRISCV (llvm_neg) = some (riscv_neg) := by native_decide :: not supported because requires many to many lowering
 -- checking that the lowering yield code as expected
@@ -411,6 +479,9 @@ def loweringLLVMShlAsExpected : loweringLLVMtoRISCV llvm_shl = some (riscv_sll) 
 def loweringLLVMSraAsExpected : loweringLLVMtoRISCV llvm_ashr = some (riscv_sra) := by native_decide
 def loweringLLVMSlrAsExpected : loweringLLVMtoRISCV llvm_lshr = some (riscv_slr) := by native_decide
 def loweringLLVMConstAsExpected : loweringLLVMtoRISCV (llvm_const) = some (riscv_const) := by native_decide
+
+
+
 
 
 def rhs_add0_com :  Com RV64 [.bv] .pure .bv := Com.ret ⟨0, by simp [Ctxt.snoc]⟩
