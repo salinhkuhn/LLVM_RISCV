@@ -47,10 +47,18 @@ def LLVMVarToRV : Γ.Var (.bitvec 64) → (LLVMCtxtToRV Γ).Var .bv
     rfl
    ⟩
 
+
 /- - skipped so far:
-copy, trunc, zext sext (because sign extend and zero extend doesnt make sense for this with
+LLVM MLIR copy instruction just returns a copy of the element ? -> ask what this instruction does, like why do we have it since its anyways SSA ?
+
+-- i assume not relevant for me atm because only operate on i64 bit
+
+trunc :: Op.trunc w w' :: truncates from w to w' bits, dont make sense in my case
+zext
+sext (because sign extend and zero extend doesnt make sense for this with
 think how to modell it on an assembly level ,icmp and select --> compile to reiscv to see it  )
 -/
+
 
 -- function that rewrites ahn expression into a computation
 variable {d} [DialectSignature d]
@@ -63,6 +71,7 @@ def Com.ofExpr : Expr d Γ eff t → Com d Γ eff t := fun e =>
 
 -- LLVM INSTRUCTION MAPPING TO RISCV: ONE-TO-ONE
 -- this works if these are single instruction level mappings
+
 def lowerSimpleIRInstruction  (e : Expr LLVM Γ .pure (.bitvec 64)) :  Expr RV64 (LLVMCtxtToRV Γ) .pure (.bv)  :=
 match e with
   -- CONST (which is a operation in llvm.mlir dialect but not in llvm ir), check
@@ -121,6 +130,10 @@ variable {d : Dialect} [DialectSignature d] in
 def Com.prependCom (e : Com d Γ eff α) (body : Com d (Γ.snoc α) eff β) : Com d Γ eff β :=
   sorry
 
+variable {d : Dialect} [DialectSignature d] in
+def Com.prependCom (e : Com d Γ eff α) (body : Com d (Γ.snoc α) eff β) : Com d Γ eff β :=
+  sorry
+
 
 /--- LLVM INSTRUCTIONS THAT MAP TO MANY RISCV INSTRUCTION
 -- the purpose of this function is account for one to many lowerings where to mapping is not trivial. -/
@@ -137,6 +150,11 @@ def lowerDecomposableIR  : (e : Expr LLVM Γ .pure (.bitvec 64)) →  Com RV64 (
         let expr2 := Expr.mk (toRISCV.Op.xor) (eff_le := by constructor) (ty_eq := rfl) ( (LLVMVarToRV (Ctxt.Var.last _ _)) ::ₕ ((LLVMVarToRV e1) ::ₕ .nil)) .nil
         --  Com.prependCom (Com.ofExpr expr1) (Com.ofExpr expr2)
         Com.var expr1 (Com.var (expr2)  (Com.ret (Ctxt.Var.last _ _)))
+    --COPY:: was given in the llvm dialect but not sure why we have it
+  | Expr.mk (InstCombine.Op.copy 64) _ _ (.cons e1 <| .nil) _  => -- basically returns the identity again
+        let expr1 := Expr.mk (toRISCV.Op.const (0)) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil);
+        let expr2 := Expr.mk (toRISCV.Op.or) (eff_le := by constructor) (ty_eq := rfl) ( (LLVMVarToRV (Ctxt.Var.last _ _)) ::ₕ ((LLVMVarToRV e1) ::ₕ .nil)) .nil
+        Com.var expr1 (Com.var (expr2) (Com.ret (Ctxt.Var.last _ _)))
   | e => Com.ofExpr (lowerSimpleIRInstruction e) -- fall back case of when this function actually gets called with a expr that can be mapped one to one
 
 
@@ -184,6 +202,108 @@ def loweringLLVMtoRISCVextended : {Γ : Ctxt LLVM.Ty} → (com : Com LLVM Γ .pu
 
 -- bellow are examples to check my lowerings
 
+def llvm_const :=
+    [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.mlir.constant(0) :i64
+      llvm.return %v1 : i64
+  }]
+
+def riscv_const :=
+  [RV64_com| {
+    ^entry (%X: !i64, %Y: !i64):
+    %v1 = "RV64.const" () {val = 0 : !i64} : (!i64, !i64) -> (!i64)
+    "return" (%v1) : (!i64, !i64) -> ()
+  }]
+
+
+def llvm_ashr :=
+    [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.ashr  %Y, %X : i64
+      llvm.return %v1 : i64
+  }]
+
+def riscv_sra :=
+  [RV64_com| {
+    ^entry (%X: !i64, %Y: !i64):
+    %v1 = "RV64.sra" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "return" (%v1) : (!i64, !i64) -> ()
+  }]
+
+
+
+def llvm_lshr :=
+    [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.lshr  %Y, %X : i64
+      llvm.return %v1 : i64
+  }]
+
+def riscv_slr :=
+  [RV64_com| {
+    ^entry (%X: !i64, %Y: !i64):
+    %v1 = "RV64.srl" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "return" (%v1) : (!i64, !i64) -> ()
+  }]
+
+def llvm_shl :=
+    [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.shl  %Y, %X : i64
+      llvm.return %v1 : i64
+  }]
+
+def riscv_sll :=
+  [RV64_com| {
+    ^entry (%X: !i64, %Y: !i64):
+    %v1 = "RV64.sll" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "return" (%v1) : (!i64, !i64) -> ()
+  }]
+
+
+def llvm_urem :=
+    [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.urem  %Y, %X : i64
+      llvm.return %v1 : i64
+  }]
+
+def riscv_urem :=
+  [RV64_com| {
+    ^entry (%X: !i64, %Y: !i64):
+    %v1 = "RV64.remu" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "return" (%v1) : (!i64, !i64) -> ()
+  }]
+
+
+def llvm_srem :=
+    [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.srem  %Y, %X : i64
+      llvm.return %v1 : i64
+  }]
+
+def riscv_srem :=
+  [RV64_com| {
+    ^entry (%X: !i64, %Y: !i64):
+    %v1 = "RV64.rem" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "return" (%v1) : (!i64, !i64) -> ()
+  }]
+
+def llvm_udiv :=
+    [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.udiv  %Y, %X : i64
+      llvm.return %v1 : i64
+  }]
+
+def riscv_udiv :=
+  [RV64_com| {
+    ^entry (%X: !i64, %Y: !i64):
+    %v1 = "RV64.divu" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "return" (%v1) : (!i64, !i64) -> ()
+  }]
 
 def llvm_sdiv :=
     [llvm(64)| {
@@ -198,7 +318,6 @@ def riscv_sdiv :=
     %v1 = "RV64.div" (%Y, %X ) : (!i64, !i64) -> (!i64)
     "return" (%v1) : (!i64, !i64) -> ()
   }]
-
 
 def llvm_sub1 :=
     [llvm(64)| {
@@ -284,6 +403,16 @@ def loweringLLVMDoubleAddAsExpected : loweringLLVMtoRISCV llvm_add_add = some (r
 def loweringLLVMAddSubAsExpected : loweringLLVMtoRISCV llvm_add_sub = some (riscv_add_sub) := by native_decide
 def loweringConstAdd : loweringLLVMtoRISCV llvm_const_add = some (riscv_const_add) := by native_decide
 def loweringLLVMSDivAsExpected : loweringLLVMtoRISCV llvm_sdiv = some (riscv_sdiv) := by native_decide
+def loweringLLVMUDivAsExpected : loweringLLVMtoRISCV llvm_udiv = some (riscv_udiv) := by native_decide
+def loweringLLVMSRemAsExpected : loweringLLVMtoRISCV llvm_srem = some (riscv_srem) := by native_decide
+def loweringLLVMSUemAsExpected : loweringLLVMtoRISCV llvm_urem = some (riscv_urem) := by native_decide
+
+def loweringLLVMShlAsExpected : loweringLLVMtoRISCV llvm_shl = some (riscv_sll) := by native_decide
+def loweringLLVMSraAsExpected : loweringLLVMtoRISCV llvm_ashr = some (riscv_sra) := by native_decide
+def loweringLLVMSlrAsExpected : loweringLLVMtoRISCV llvm_lshr = some (riscv_slr) := by native_decide
+def loweringLLVMConstAsExpected : loweringLLVMtoRISCV (llvm_const) = some (riscv_const) := by native_decide
+
+
 def rhs_add0_com :  Com RV64 [.bv] .pure .bv := Com.ret ⟨0, by simp [Ctxt.snoc]⟩
 #check rhs_add0_com
 
