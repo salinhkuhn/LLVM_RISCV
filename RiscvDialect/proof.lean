@@ -1,4 +1,4 @@
-import RiscvDialect.RDialect
+import RiscvDialect.RISCV64.all
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
 import SSA.Projects.InstCombine.Refinement
@@ -27,31 +27,31 @@ def CtxtRefines (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RV64.Ty) : Type := -- defining ho
 --def V₁:= (Ctxt.Valuation.ofHVector lh_llvm)
 --def V₂:= (Ctxt.Valuation.ofHVector lh_riscv)
 def LLVMCtxt := Ctxt InstCombine.Ty
-def RISCVCtxt := Ctxt toRISCV.Ty
+def RISCVCtxt := Ctxt RISCV64.Ty
 
 
 
 --def V₁:= (Ctxt.Valuation.ofHVector lh_llvm)
 --def V₂:= (Ctxt.Valuation.ofHVector lh_riscv)
 
-def toLLVM : RV64.Ty → InstCombine.Ty
+def toLLVM : RISCV64.Ty → InstCombine.Ty
   | .bv => .bitvec 64 -- keep in mind the InstCombine Ty is an otion bit vec
 
 -- this defines how given a riscv context, the corresponding LLVM context should look under equailty assumptions
-def RISCV_to_LLVM_should (B : Ctxt RV64.Ty) : (Ctxt LLVM.Ty) :=
+def RISCV_to_LLVM_should (B : Ctxt RISCV64.Ty) : (Ctxt LLVM.Ty) :=
   Ctxt.map toLLVM B
 
 -- this checks that the LLVM context is exactly what the RISCV context would expect
-def contextCrossDialectEquality1 (A : Ctxt InstCombine.Ty) (B : Ctxt RV64.Ty) : Prop :=
+def contextCrossDialectEquality1 (A : Ctxt InstCombine.Ty) (B : Ctxt RISCV64.Ty) : Prop :=
   (RISCV_to_LLVM_should B) = A
 
 
 -- not sure how to implement this
-def CtxtRefinesFunc (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
+def CtxtRefinesFunc (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RISCV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
   (Δ.Var .bv) → Γ.Var (.bitvec 64) -- from bit vec to option bit vec
 
 
-structure ValutationRefinesEq {A : Ctxt InstCombine.Ty} {B: Ctxt RV64.Ty} (AV : A.Valuation) (BV : B.Valuation) where
+structure ValutationRefinesEq {A : Ctxt InstCombine.Ty} {B: Ctxt RISCV64.Ty} (AV : A.Valuation) (BV : B.Valuation) where
   f : CtxtRefinesFunc A B
   val_refines : ∀ (v : B.Var .bv) (x : BitVec 64) , AV (f v) = some x → BV v = x
 
@@ -62,7 +62,7 @@ structure ValuationRefines {Γ : LLVMCtxt} {Δ : RISCVCtxt} (V₁ : Γ.Valuation
 
 
 -- my proposal but not sure of the context refinement
-def CtxtRefinesFuncRiscvToLLVM (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
+def CtxtRefinesFuncRiscvToLLVM (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RISCV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
  Γ.Var (.bitvec 64) → (Δ.Var .bv)
 -- here then distingguish whether it is a none or some
 
@@ -108,7 +108,7 @@ def allVars (Δ : Ctxt toRISCV.Ty) : List (Δ.Var .bv) :=
 --   (List.range Γ.length).map (fun i => ⟨i, sorry⟩)
 
 
-def allVarsRiscv (Δ : Ctxt (toRISCV.Ty)) : List (Δ.Var .bv) :=
+def allVarsRiscv (Δ : Ctxt (RISCV64.Ty)) : List (Δ.Var .bv) :=
   (List.range Δ.length).map (fun i =>
     ⟨i, sorry⟩)
 
@@ -145,7 +145,7 @@ def convertLLVMContextToRiscv (LLVMVariables : List (Option (BitVec 64))) : List
     | none   => acc
   ) []
 
-def dialectContextTransform2 (Δ : RISCVCtxt) (Γ : LLVMCtxt) (f :RV64.Ty → LLVM.Ty ): Prop :=
+def dialectContextTransform2 (Δ : RISCVCtxt) (Γ : LLVMCtxt) (f :RISCV64.Ty → LLVM.Ty ): Prop :=
   (Ctxt.map f Δ) = Γ
 /-
 def dialectValuationTransform (Δ : RISCVCtxt) (Γ : LLVMCtxt) (f :RV64.Ty → LLVM.Ty ) : Prop :=
@@ -155,10 +155,10 @@ def dialectValuationTransform (Δ : RISCVCtxt) (Γ : LLVMCtxt) (f :RV64.Ty → L
 def dialectValuationTransform (Δ : RISCVCtxt) (Γ : LLVMCtxt) (V₁ : Γ.Valuation) (V₂ : Δ.Valuation): Prop :=
   convertLLVMContextToRiscv (evalContextLLVM Γ V₁)  = (evalContextRiscv Δ V₂)
 
-theorem toRISCV.Ty.isSubsingleton (t : toRISCV.Ty) : t = toRISCV.Ty.bv := by
+theorem toRISCV.Ty.isSubsingleton (t : RISCV64.Ty) : t = RISCV64.Ty.bv := by
   cases t; rfl
 
-instance : Subsingleton (toRISCV.Ty) where
+instance : Subsingleton (RISCV64.Ty) where
     allEq := by
       intros a b
       rw [toRISCV.Ty.isSubsingleton a, toRISCV.Ty.isSubsingleton b]
@@ -214,15 +214,15 @@ A matched context between LLVM and RISCV for arbitrary LLVM context Γ and arbit
 -/
 structure contextMatchLLVMRISCV {Γ : LLVMCtxt} {Δ : RISCVCtxt}
     (V₁ : Γ.Valuation) (V₂ : Δ.Valuation)
-    (hom : Δ.Var toRISCV.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64)) where
-  ctxtEq : ∀ {vΔ : Δ.Var (toRISCV.Ty.bv)} {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
+    (hom : Δ.Var RISCV64.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64)) where
+  ctxtEq : ∀ {vΔ : Δ.Var (RISCV64.Ty.bv)} {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
     (h : vΓ = hom vΔ) {x : BitVec 64}, (V₁ vΓ = some x) → V₂ vΔ = x
 
 theorem eq_of_contextMatch_of_eq {Γ : LLVMCtxt} {Δ : RISCVCtxt}
     {VΓ : Ctxt.Valuation Γ}
     {VΔ : Ctxt.Valuation Δ}
-    (hom : Δ.Var toRISCV.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64))
-    (hV : contextMatchLLVMRISCV VΓ VΔ hom) (vΔ : Δ.Var toRISCV.Ty.bv) {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
+    (hom : Δ.Var RISCV64.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64))
+    (hV : contextMatchLLVMRISCV VΓ VΔ hom) (vΔ : Δ.Var RISCV64.Ty.bv) {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
     (hv : vΓ = hom vΔ)
     (hVΓ : VΓ vΓ = some x) : VΔ vΔ = x := by
     apply hV.ctxtEq
@@ -270,10 +270,10 @@ theorem denote_riscv_add_eq_add (v1 v2 : BitVec 64)
   riscv_add.denote V =  (v1 + v2) := by
 unfold riscv_add
 simp_peephole
-simp [HVector.getN, HVector.get]
+-- simp [HVector.getN, HVector.get] not needed anymore bc alex changed hvector strucutre
 repeat rw [Ctxt.Var.last]
 rw [h1] -- TODO: correct normal forms and simprocs
-rw [RV64.RTYPE_pure64_RISCV_ADD]
+rw [RV64Semantics.RTYPE_pure64_RISCV_ADD]
 rw [BitVec.add_eq]
 congr
 
@@ -343,14 +343,14 @@ theorem valuation_eq_some_of_llvm_add_denote_eq_some
       injection this with this
       rw [this]
 
-def addHom (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv) :
+def addHom (vΔ: Ctxt.Var [RISCV64.Ty.bv, RISCV64.Ty.bv] RISCV64.Ty.bv) :
   Ctxt.Var [InstCombine.Ty.bitvec 64, InstCombine.Ty.bitvec 64] (InstCombine.Ty.bitvec 64) :=
 ⟨vΔ.val, by -- 0 -> 0, 1 -> 1
   have := vΔ.prop
   have : vΔ.val ≤ 1 := by
     by_contra h
     simp at h
-    have hcontra : Ctxt.get? [Ty.bv, Ty.bv] vΔ.val = none := by
+    have hcontra : Ctxt.get? [RISCV64.Ty.bv, RISCV64.Ty.bv] vΔ.val = none := by
       simp [Ctxt.get?] -- TODO: write theorems
       omega
     rw [hcontra]at this
@@ -447,10 +447,10 @@ theorem denote_riscv_sub_eq_sub (v1 v2 : BitVec 64)
   riscv_sub.denote V =  (v1 - v2) := by
 unfold riscv_sub
 simp_peephole
-simp [HVector.getN, HVector.get]
+ -- simp [HVector.getN, HVector.get]
 repeat rw [Ctxt.Var.last]
 rw [h1] -- TODO: correct normal forms and simprocs
-rw [RV64.RTYPE_pure64_RISCV_SUB]
+rw [RV64Semantics.RTYPE_pure64_RISCV_SUB]
 rw [BitVec.sub_eq] -- look up this lemma
 congr
 
@@ -494,7 +494,6 @@ theorem valuation_eq_some_of_llvm_sub_denoe_eq_some  (h: llvm_sub.denote V = som
     -- if i just write simp it would be give me false evenought i can proof it , use other hyptoheis
     -- use the lemma is llvm_sub denote is some it must be using the first nad 2nd variable and they are some
 
-  . -- case where v1? is some
 
 theorem translate_sub (V₁)(V₂) (h : contextMatch V₁ V₂) :
   ∀ x, (llvm_sub.denote V₁ = some x → riscv_sub.denote V₂ = x) := by

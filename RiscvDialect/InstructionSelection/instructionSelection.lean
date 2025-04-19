@@ -1,4 +1,7 @@
-import RiscvDialect.RDialect
+-- import RiscvDialect.RDialect
+import RiscvDialect.RISCV64.Syntax
+import RiscvDialect.RISCV64.Base
+import RiscvDialect.RISCV64.Semantics
 import RiscvDialect.RefinementDialect
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
@@ -12,8 +15,8 @@ import RiscvDialect.Instructions.llvm_instructions
 
 import Lean
 
-open toRISCV
-open RV64
+open RISCV64
+open RISCVExpr
 open InstCombine (LLVM)
 set_option maxHeartbeats 10000000
 /-
@@ -80,52 +83,52 @@ def lowerSimpleIRInstruction  (e : Expr LLVM Γ .pure (.bitvec 64)) :  Expr RV64
 match e with
   -- CONST (which is a operation in llvm.mlir dialect but not in llvm ir), check
   | Expr.mk (InstCombine.Op.const 64 val) _ _ (.nil) _  =>
-      Expr.mk (toRISCV.Op.const val) (eff_le := by constructor) (ty_eq := rfl) (.nil) .nil
+      Expr.mk (RISCV64.Op.const val) (eff_le := by constructor) (ty_eq := rfl) (.nil) .nil
   -- ADD (with or without overflow)
   | Expr.mk (InstCombine.Op.add 64 nswnuw') _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.add) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.add) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   -- SUB
   | Expr.mk (InstCombine.Op.sub 64 nswnuw') _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.sub) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil -- double check if order is correct
+      Expr.mk (RISCV64.Op.sub) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil -- double check if order is correct
   -- AND
   |Expr.mk (InstCombine.Op.and 64) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.and) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.and) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   -- OR NOMRAL
   |Expr.mk (InstCombine.Op.or 64  ⟨false⟩) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  => -- disjoint or aka "or":: double check the mapping
-      Expr.mk (toRISCV.Op.or) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.or) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   --OR DISJOINT:: so far this case not supported by the framework , meaning if disjoint true then cannot share a bit that is one in both bit vecs.
   |Expr.mk (InstCombine.Op.or 64  ⟨true⟩) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  => -- disjoint or aka "or":: double check the mapping:: to be specified what the disjoint or will in riscv
-      Expr.mk (toRISCV.Op.or) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.or) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   --XOR
   |Expr.mk (InstCombine.Op.xor 64 ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.xor) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.xor) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
    --SHL (no matter the flags the riscv ersion is a refinement as one overflow it hardcodes the value to -1 while llvm would emit a poison value )
   -- the riscv is a refinement because it extract the lower 6 bits any wont ever reach the overflow case, so while llvm has a poison value, rsicv choose the value in an elegant way.
   |Expr.mk (InstCombine.Op.shl 64 flags ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.sll) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.sll) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   -- logical shift right ----debug:riscv first value is shift amount !!! error prone when modelling
   |Expr.mk (InstCombine.Op.lshr 64 flags ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.srl) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.srl) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   -- arithmetic shift right, --debug: riscv first value is shift amount !!! error prone when modelling
   | Expr.mk (InstCombine.Op.ashr 64 flags ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.sra) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.sra) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   --MUL
   |Expr.mk (InstCombine.Op.mul 64 ⟨false, false⟩ ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.mul) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.mul) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   -- SDIV -- the exact flags requires exact division, requires the reminder to be zero else will return poison value, riscv here is a refinement because will still execute it
   |Expr.mk (InstCombine.Op.sdiv 64 flags ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  => -- llvm e1/e2 while riscv takes the divisor first
-      Expr.mk (toRISCV.Op.div) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.div) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   -- UDIV
   |Expr.mk (InstCombine.Op.udiv 64 flags ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  => -- llvm e1/e2, order in riscv is reverse
-      Expr.mk (toRISCV.Op.divu) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.divu) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
    --UREM ::  unsigned reminder (again here riscv a refinement because it returns first arg while llvm would return poison on mod 0)
   |Expr.mk (InstCombine.Op.urem 64 ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  =>
-      Expr.mk (toRISCV.Op.remu) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.remu) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   --SREM :: signed reminder, riscv is refinement because llvm returns 0 is mod 0 but riscv returns first argument
   | Expr.mk (InstCombine.Op.srem 64 ) _ _ (e1 ::ₕ (e2 ::ₕ .nil)) _  => -- llvm: x smod y
-      Expr.mk (toRISCV.Op.rem) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
+      Expr.mk (RISCV64.Op.rem) (eff_le := by constructor) (ty_eq := rfl) (.cons  (LLVMVarToRV e1)  <| .cons (LLVMVarToRV e2)  <| .nil) .nil
   -- FALLBACK FUNCTION
-  |e => Expr.mk (toRISCV.Op.const 0) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil)
+  |e => Expr.mk (RISCV64.Op.const 0) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil)
 -- !!!!!! check operator order in llvm vs riscv not modelled the same espeically for div and rem etc.
 
 
@@ -364,20 +367,20 @@ then need to move the indexes of all the variables that will be added to the con
 def lowerDecomposableIR  : (e : Expr LLVM Γ .pure (.bitvec 64)) →  Com RV64 (LLVMCtxtToRV Γ) .pure (.bv)
   -- neg = const 0 && sub
   | Expr.mk (InstCombine.Op.neg 64) _ _ ((e1 ::ₕ .nil)) _ =>
-        let expr1 := Expr.mk (toRISCV.Op.const (0)) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil);
-        let expr2 := Expr.mk (toRISCV.Op.sub) (eff_le := by constructor) (ty_eq := rfl) ( (LLVMVarToRV (Ctxt.Var.last _ _)) ::ₕ ((LLVMVarToRV e1) ::ₕ .nil)) .nil
+        let expr1 := Expr.mk (RISCV64.Op.const (0)) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil);
+        let expr2 := Expr.mk (RISCV64.Op.sub) (eff_le := by constructor) (ty_eq := rfl) ( (LLVMVarToRV (Ctxt.Var.last _ _)) ::ₕ ((LLVMVarToRV e1) ::ₕ .nil)) .nil
         --  Com.prependCom (Com.ofExpr expr1) (Com.ofExpr expr2)
         Com.var expr1 (Com.var (expr2)  (Com.ret (Ctxt.Var.last _ _)))
   --NOT implemented as const (-1) and then xor
   | Expr.mk (InstCombine.Op.not 64) _ _ ((e1 ::ₕ .nil)) _ =>
-        let expr1 := Expr.mk (toRISCV.Op.const (-1)) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil);
-        let expr2 := Expr.mk (toRISCV.Op.xor) (eff_le := by constructor) (ty_eq := rfl) ( (LLVMVarToRV (Ctxt.Var.last _ _)) ::ₕ ((LLVMVarToRV e1) ::ₕ .nil)) .nil
+        let expr1 := Expr.mk (RISCV64.Op.const (-1)) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil);
+        let expr2 := Expr.mk (RISCV64.Op.xor) (eff_le := by constructor) (ty_eq := rfl) ( (LLVMVarToRV (Ctxt.Var.last _ _)) ::ₕ ((LLVMVarToRV e1) ::ₕ .nil)) .nil
         --  Com.prependCom (Com.ofExpr expr1) (Com.ofExpr expr2)
         Com.var expr1 (Com.var (expr2)  (Com.ret (Ctxt.Var.last _ _)))
     --COPY:: was given in the llvm dialect but not sure why we have it
   | Expr.mk (InstCombine.Op.copy 64) _ _ (.cons e1 <| .nil) _  => -- basically returns the identity again
-        let expr1 := Expr.mk (toRISCV.Op.const (0)) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil);
-        let expr2 := Expr.mk (toRISCV.Op.or) (eff_le := by constructor) (ty_eq := rfl) ( (LLVMVarToRV (Ctxt.Var.last _ _)) ::ₕ ((LLVMVarToRV e1) ::ₕ .nil)) .nil
+        let expr1 := Expr.mk (RISCV64.Op.const (0)) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil);
+        let expr2 := Expr.mk (RISCV64.Op.or) (eff_le := by constructor) (ty_eq := rfl) ( (LLVMVarToRV (Ctxt.Var.last _ _)) ::ₕ ((LLVMVarToRV e1) ::ₕ .nil)) .nil
         Com.var expr1 (Com.var (expr2) (Com.ret (Ctxt.Var.last _ _)))
   | e => Com.ofExpr (lowerSimpleIRInstruction e) -- fall back case of when this function actually gets called with a expr that can be mapped one to one
 
@@ -731,9 +734,9 @@ def rhs : Com RV64 [.bv] .pure .bv := Com.var (const 0) (
 
 --PLAYING AROUND WITH PEEPLHOLE OPTIMIZATIONS
 -- couldnt figue out to appy the rewrites onto a some Computation yet.
-def optimizedCode: Com RV64 [.bv] .pure .bv := rewritePeepholeAt rewrite_add0 1 riscv_const_add
+--def optimizedCode: Com RV64 [.bv] .pure .bv := rewritePeepholeAt rewrite_add0 1 riscv_const_add
 -- now try run rewritting pass on the generated riscv-code
-def applyPeepholeOptimizationOnRewritten : some (optimizedCode) = some rhs := by native_decide
+--def applyPeepholeOptimizationOnRewritten : some (optimizedCode) = some rhs := by native_decide
 
 /-
 def loweringLLVMRet :  loweringLLVMtoRISCV llvm_ret = some (riscv_ret) := by native_decide

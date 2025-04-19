@@ -1,4 +1,6 @@
-import RiscvDialect.RDialect
+import RiscvDialect.RISCV64.Syntax
+import RiscvDialect.RISCV64.Base
+import RiscvDialect.RISCV64.Semantics
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
 import SSA.Projects.InstCombine.Refinement
@@ -8,14 +10,14 @@ import SSA.Projects.InstCombine.Base
 import SSA.Projects.InstCombine.ForLean
 import Lean
 
-open toRISCV -- the riscv dialect
+open RISCV64-- the riscv dialect
 open InstCombine (LLVM)
 
 set_option Elab.async false
 
 
 def LLVMCtxt := Ctxt InstCombine.Ty
-def RISCVCtxt := Ctxt toRISCV.Ty
+def RISCVCtxt := Ctxt RV64.Ty
 
 -- contains some of my attempts to define context mapping. might be able to see what I've done wrong in some months
 /-
@@ -73,11 +75,11 @@ def evalContextLLVM(Γ : Ctxt (InstCombine.Ty)) (V₁ : Γ.Valuation) : List (Op
 -- lemmas that helped me in proof engineering
 
 -- to tell Lean that all elements of toRISCV.Ty actually have type .bv because toRISCV Dialect only models one type.
-theorem toRISCV.Ty.isSubsingleton (t : toRISCV.Ty) : t = toRISCV.Ty.bv := by
+theorem toRISCV.Ty.isSubsingleton (t : RV64.Ty) : t = .bv := by
   cases t; rfl -- cases on the constructor of t and because its its only one element is follows by reflection.
 
 -- proof that all elements Riscv have the type bitvector .bv
-instance : Subsingleton (toRISCV.Ty) where
+instance : Subsingleton (RV64.Ty) where
     allEq := by
       intros a b
       rw [toRISCV.Ty.isSubsingleton a, toRISCV.Ty.isSubsingleton b]
@@ -98,17 +100,17 @@ structure UniformHHom {TyΓ} {TyΔ} (Γ : Ctxt TyΓ) (Δ : Ctxt TyΔ) [TyDenote 
 -- is already generic over contexts (not over types)
 structure contextMatchLLVMRISCV {Γ : LLVMCtxt} {Δ : RISCVCtxt}
     (V₁ : Γ.Valuation) (V₂ : Δ.Valuation)
-    (hom : Δ.Var toRISCV.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64)) where
-  ctxtEq : ∀ {vΔ : Δ.Var (toRISCV.Ty.bv)} {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
+    (hom : Δ.Var RISCV64.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64)) where
+  ctxtEq : ∀ {vΔ : Δ.Var (RISCV64.Ty.bv)} {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
     (h : vΓ = hom vΔ) {x : BitVec 64}, (V₁ vΓ = some x) → V₂ vΔ = x
 
 -- proving that if LLVM has a non-poison value then in RISC-V it is a register value
 theorem eq_of_contextMatch_of_eq {Γ : LLVMCtxt} {Δ : RISCVCtxt}
     {VΓ : Ctxt.Valuation Γ}
     {VΔ : Ctxt.Valuation Δ}
-    (hom : Δ.Var toRISCV.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64))
+    (hom : Δ.Var RISCV64.Ty.bv → Γ.Var (InstCombine.Ty.bitvec 64))
     (hV : contextMatchLLVMRISCV VΓ VΔ hom)
-    (vΔ : Δ.Var toRISCV.Ty.bv) {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
+    (vΔ : Δ.Var RISCV64.Ty.bv) {vΓ : Γ.Var (InstCombine.Ty.bitvec 64)}
     (hv : vΓ = hom vΔ) -- maps between the indicies
     (hVΓ : VΓ vΓ = some x) : VΔ vΔ = x := by
     apply hV.ctxtEq -- introduce new subgoals by using that the conclusion of the goal matches and the proofing the assumptions

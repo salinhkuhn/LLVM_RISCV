@@ -6,8 +6,12 @@ import SSA.Projects.InstCombine.ForStd
 import SSA.Projects.InstCombine.LLVM.Semantics
 open LLVM
 
-/- - this file is stil in progress and tried to modell riscv and llvm within one context.
-implementation is very minimal in terms of instruction almost only one to one lowering r.-/
+/-!
+huge hybrid dialect
+
+this file is stil in progress and tried to modell riscv and llvm within one context.
+implementation is very minimal in terms of instruction almost only one to one lowering r.
+-/
 
 namespace riscv.semantics
 

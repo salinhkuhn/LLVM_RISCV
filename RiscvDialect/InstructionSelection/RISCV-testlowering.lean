@@ -4,7 +4,6 @@ import SSA.Core.ErasedContext
 import SSA.Core.HVector
 import SSA.Core.EffectKind
 import SSA.Core.Util
-import RiscvDialect.RDialect
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
 --import SSA.Projects.InstCombine.Refinement
 import SSA.Projects.InstCombine.Tactic
@@ -33,21 +32,20 @@ import SSA.Projects.DCE.DCE
 import Mathlib.Tactic.Ring
 open MLIR AST in
 
-open RV64
-open toRISCV
+open RISCVExpr
 open DCE
 
 /-- Tthis file contains tools to lowering riscv instructions to other riscv instructions. Also includes a skeleton of
 a verifed lowering from riscv to riscv but where simple just to get familar with how to modell such translations.
 -/
 
-def comSize{Γ : List Ty} (com: Com RV64 Γ .pure .bv ) : Nat :=
+def comSize {Γ : List Ty} (com: Com RV64 Γ .pure .bv ) : Nat :=
   match com with
   |Com.ret _ => 1
   |Com.var _ c' => 1 + comSize c'
 
 
-def transalte (op :toRISCV.Op) : toRISCV.Op :=
+def transalte (op :RISCV64.Op) : RISCV64.Op :=
   match op with
   | .add => .sub
   | .sub => .add
@@ -60,7 +58,7 @@ def transalte (op :toRISCV.Op) : toRISCV.Op :=
 def instruction_translation_refinement (e : Expr RV64 Γ .pure .bv) : { e' : Expr RV64 Γ .pure .bv //  e.denote = e'.denote } :=
   match e with
   | Expr.mk
-    (.add)
+    (add)
     (_)
     (_)
     (ls)
@@ -75,7 +73,7 @@ def instruction_translation_refinement (e : Expr RV64 Γ .pure .bv) : { e' : Exp
 def instruction (e : Expr RV64 Γ .pure .bv) :  Expr RV64 Γ .pure .bv :=
   match e with
   | Expr.mk
-    (.add)
+    (add)
     (_)
     (_)
     (ls)

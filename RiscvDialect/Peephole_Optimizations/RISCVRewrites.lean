@@ -7,9 +7,7 @@ import SSA.Core.Util
 import RiscvDialect.RISCV64.Syntax
 import RiscvDialect.RISCV64.Base
 import RiscvDialect.RISCV64.Semantics
-import RiscvDialect.RDialect
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
---import SSA.Projects.InstCombine.Refinement
 import SSA.Projects.InstCombine.Tactic
 import SSA.Projects.InstCombine.TacticAuto
 import SSA.Projects.InstCombine.Base
@@ -37,7 +35,8 @@ import Mathlib.Tactic.Ring
 open MLIR AST in
 
 open DCE
-
+open RISCV64 -- acceses the RISCV64 dialect.
+open RISCVExpr -- acceses the RISCV64 version to simplify making expression.
 -- additional lemmas introduced for the proofs.
 
 --@[simp] --> to do: fix it
@@ -75,7 +74,7 @@ theorem peephole01 : (rhs_and0  ⊑ᵣ lhs_and0) := by
   unfold lhs_and0 rhs_and0
   simp_alive_peephole
   simp
-  unfold RV64.RTYPE_pure64_RISCV_AND
+  unfold RV64Semantics.RTYPE_pure64_RISCV_AND
   simp
   unfold RiscvInstrSeqRefines
   rfl
@@ -98,7 +97,7 @@ def rewrite_and0 : PeepholeRewrite RV64 [.bv] .bv :=
         funext Γv
         simp_peephole
         simp
-        unfold RV64.RTYPE_pure64_RISCV_AND
+        unfold RV64Semantics.RTYPE_pure64_RISCV_AND
         bv_decide
 }
 -- zero optimization
@@ -179,7 +178,7 @@ def rhs_add0 : Com RV64 [.bv] .pure .bv :=
 theorem add0_peepholeRewrite : rhs_add0 ⊑ᵣ lhs_add0 := by
   unfold lhs_add0 rhs_add0
   simp_alive_peephole
-  unfold RV64.RTYPE_pure64_RISCV_ADD
+  unfold RV64Semantics.RTYPE_pure64_RISCV_ADD
   unfold RiscvInstrSeqRefines
   bv_decide
 
@@ -200,7 +199,7 @@ def rewrite_add0 : PeepholeRewrite RV64 [.bv] .bv :=
         --funext Γv
         simp_peephole --using Γv
         simp
-        unfold RV64.RTYPE_pure64_RISCV_ADD
+        unfold RV64Semantics.RTYPE_pure64_RISCV_ADD
         bv_decide
 }
 
@@ -379,7 +378,7 @@ theorem peephole02 :
     }] := by
     simp_alive_peephole
     simp only [BitVec.ofInt_ofNat]
-    unfold RV64.SHIFTIOP_pure64_RISCV_SLLI RV64.RTYPE_pure64_RISCV_ADD
+    unfold RV64Semantics.SHIFTIOP_pure64_RISCV_SLLI RV64Semantics.RTYPE_pure64_RISCV_ADD
     unfold RiscvInstrSeqRefines
     bv_decide
 
@@ -399,7 +398,7 @@ def rewrite_02 : PeepholeRewrite RV64 [.bv] .bv :=
         --funext Γv
         simp_peephole --using Γv
         simp
-        unfold RV64.SHIFTIOP_pure64_RISCV_SLLI RV64.RTYPE_pure64_RISCV_ADD
+        unfold RV64Semantics.SHIFTIOP_pure64_RISCV_SLLI RV64Semantics.RTYPE_pure64_RISCV_ADD
         bv_decide
 }
 
@@ -428,7 +427,7 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
         -- funext Γv
         simp_peephole --using Γv depending on branch the new tactic is avaible or not.
         simp
-        unfold RV64.RTYPE_pure64_RISCV_ADD  RV64.SHIFTIOP_pure64_RISCV_SLLI
+        unfold RV64Semantics.RTYPE_pure64_RISCV_ADD  RV64Semantics.SHIFTIOP_pure64_RISCV_SLLI
         simp
         intro someE
         have : 4 * someE = someE + someE + (someE + someE)  := by bv_decide
@@ -451,7 +450,7 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
     -- funext Γv
     simp_peephole --using Γv
     simp
-    unfold RV64.RTYPE_pure64_RISCV_ADD RV64.SHIFTIOP_pure64_RISCV_SLLI
+    unfold RV64Semantics.RTYPE_pure64_RISCV_ADD RV64Semantics.SHIFTIOP_pure64_RISCV_SLLI
     simp [BitVec.add_eq, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod, BitVec.shiftLeft_eq]
     intro e
     show @Eq (BitVec _) (e + e + (e + e)) (e <<< 2) -- used to help Lean to discover the type of the operation
@@ -477,7 +476,7 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       -- funext Γv
       simp_peephole --  using Γv
       simp
-      unfold RV64.RTYPE_pure64_RISCV_AND
+      unfold RV64Semantics.RTYPE_pure64_RISCV_AND
       bv_decide
 
 /-  mul rd rs1 $1
@@ -499,7 +498,7 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       -- funext Γv
       simp_peephole -- using Γv
       simp
-      unfold RV64.MUL_pure64_fff RV64.SHIFTIOP_pure64_RISCV_SLLI
+      unfold RV64Semantics.MUL_pure64_fff RV64Semantics.SHIFTIOP_pure64_RISCV_SLLI
       intro e
       show @Eq (BitVec _) _ _
       simp [get_cons_1]
@@ -525,7 +524,7 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       }].denote := by
       -- funext Γv
       simp_peephole -- using Γv
-      unfold RV64.RTYPE_pure64_RISCV_XOR RV64.RTYPE_pure64_RISCV_SUB
+      unfold RV64Semantics.RTYPE_pure64_RISCV_XOR RV64Semantics.RTYPE_pure64_RISCV_SUB
       intros e1 e2
       show @Eq (BitVec 64) _ _
       --show @Eq (BitVec 64) ((s.sub s).xor e) e
@@ -555,7 +554,7 @@ theorem xor_eq_zero :
   -- funext Γv
   simp_peephole -- using Γv
   intro e
-  unfold RV64.RTYPE_pure64_RISCV_XOR
+  unfold RV64Semantics.RTYPE_pure64_RISCV_XOR
   -- rw[HVector.cons_get_zero]
   show @Eq (BitVec 64) _ _
   bv_decide
@@ -601,7 +600,7 @@ theorem RISCV64_AddSub : RISCVE_AddSub_src = RISCVE_AddSub_opt := by
   --funext Γv
   simp_peephole --  using Γv
   -- intro e
-  unfold RV64.RTYPE_pure64_RISCV_ADD RV64.SHIFTIOP_pure64_RISCV_SLLI
+  unfold RV64Semantics.RTYPE_pure64_RISCV_ADD RV64Semantics.SHIFTIOP_pure64_RISCV_SLLI
   -- rw [HVector.cons_get_zero, HVector.cons_get_zero]
   bv_decide
 
@@ -626,7 +625,7 @@ theorem RISCV64_AddSub1164 :
   -- funext Γv
   simp_peephole --  using Γv
   intro e1 e2
-  unfold RV64.RTYPE_pure64_RISCV_ADD RV64.RTYPE_pure64_RISCV_SUB
+  unfold RV64Semantics.RTYPE_pure64_RISCV_ADD RV64Semantics.RTYPE_pure64_RISCV_SUB
   -- simp [HVector.cons_get_zero]
   bv_decide
 
@@ -659,7 +658,7 @@ theorem RISCV64_AddSub1164_2 :
   -- funext Γv
   simp_peephole --  using Γv
   intro e1 e2
-  unfold RV64.RTYPE_pure64_RISCV_SUB RV64.RTYPE_pure64_RISCV_ADD
+  unfold RV64Semantics.RTYPE_pure64_RISCV_SUB RV64Semantics.RTYPE_pure64_RISCV_ADD
   simp [HVector.cons_get_zero]
   show @Eq (BitVec 64) _ _
   bv_decide
@@ -685,7 +684,7 @@ theorem RV64_DivRemOfSelect :
   -- funext Γv
   simp_peephole -- using Γv
   intro e1 e2
-  unfold RV64.ZICOND_RTYPE_pure64_RISCV_RISCV_CZERO_NEZ RV64.DIV_pure64_unsigned
+  unfold RV64Semantics.ZICOND_RTYPE_pure64_RISCV_RISCV_CZERO_NEZ RV64Semantics.DIV_pure64_unsigned
   simp only [BitVec.ofInt_ofNat, BitVec.zero_eq, ↓reduceIte, Int.ofNat_eq_coe, Int.natCast_eq_zero,
     Int.reduceNeg, implies_true]
 

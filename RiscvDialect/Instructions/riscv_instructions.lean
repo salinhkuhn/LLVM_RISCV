@@ -1,4 +1,3 @@
-import RiscvDialect.RDialect
 import RiscvDialect.RefinementDialect
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
@@ -8,8 +7,11 @@ import SSA.Projects.InstCombine.TacticAuto
 import SSA.Projects.InstCombine.Base
 import SSA.Projects.InstCombine.ForLean
 import Lean
+import RiscvDialect.RISCV64.Syntax
+import RiscvDialect.RISCV64.Base
+import RiscvDialect.RISCV64.Semantics
 
-open toRISCV
+open RISCV64
 
 /-- this file contains a collection of RISCV instructions modelled as computations where each computation contains
 one instruction-/

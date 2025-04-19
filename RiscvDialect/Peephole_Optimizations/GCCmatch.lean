@@ -1,8 +1,7 @@
 import RiscvDialect.Peephole_Optimizations.RISCVRewrites
 -- this file contains the rewrites employed in the GCC compiler, its called match.pd and contains several peephole optimizations employed in the GCC compiler.
 -- the goal is to implement and verfiy all and especially integrate all of them into our instruction selection pipeline.
-open RV64
-open toRISCV
+open RISCV64
 /-
 optimization found in the gcc backend
 

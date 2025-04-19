@@ -1,4 +1,5 @@
-import RiscvDialect.RDialect
+
+import RiscvDialect.RISCV64.all
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
 import SSA.Projects.InstCombine.Refinement
@@ -10,11 +11,6 @@ import Lean
 import Mathlib.Tactic.Ring
 import SSA.Projects.InstCombine.ForLean
 import SSA.Projects.InstCombine.LLVM.EDSL
-import SSA.Experimental.Bits.Fast.Reflect
-import SSA.Experimental.Bits.Fast.MBA
-import SSA.Experimental.Bits.FastCopy.Reflect
-import SSA.Experimental.Bits.AutoStructs.Tactic
-import SSA.Experimental.Bits.AutoStructs.ForLean
 import Std.Tactic.BVDecide
 import SSA.Core.Tactic.TacBench
 import Leanwuzla
@@ -31,20 +27,21 @@ abbrev Com.RefinementRiscv (src tgt : Com RV64 Γ .pure t)
 def lh_llvm (rs1 rs2: BitVec 64) : (HVector TyDenote.toType [InstCombine.Ty.bitvec 64,InstCombine.Ty.bitvec 64]) :=
           HVector.cons (some (rs2)) <| HVector.cons (some (rs1)) .nil
 
-def lh_riscv (rs1 rs2: BitVec 64)  : HVector TyDenote.toType [toRISCV.Ty.bv,toRISCV.Ty.bv ] :=
+def lh_riscv (rs1 rs2: BitVec 64)  : HVector TyDenote.toType [RISCV64.Ty.bv,RISCV64.Ty.bv ] :=
   HVector.cons ((rs2)) <| HVector.cons ( (rs1)) .nil -- hvector from which we will create the valuation
 
-open toRISCV
+open RISCV64
+open RISCVExpr
 open InstCombine(LLVM)
 
 def LLVMCtxt := Ctxt InstCombine.Ty
-def RISCVCtxt := Ctxt toRISCV.Ty
+def RISCVCtxt := Ctxt RISCV64.Ty
 
 
 def lh_llvm1 (rs1 rs2: BitVec 64) : (HVector TyDenote.toType [InstCombine.Ty.bitvec 64,InstCombine.Ty.bitvec 64]) :=
           HVector.cons (some (rs2)) <| HVector.cons (some (rs1)) .nil
 
-def lh_riscv2 (rs1 rs2: BitVec 64)  : HVector TyDenote.toType [toRISCV.Ty.bv,toRISCV.Ty.bv ] :=
+def lh_riscv2 (rs1 rs2: BitVec 64)  : HVector TyDenote.toType [RISCV64.Ty.bv,RISCV64.Ty.bv ] :=
   HVector.cons ((rs2)) <| HVector.cons ( (rs1)) .nil -- hvector from which we will create the valuation
 
 
@@ -84,7 +81,7 @@ theorem  translation_add_combined1 (x3 x4: BitVec 64) :
 
 def HVector.llvmToRiscv {ts : List InstCombine.Ty}
   (h : HVector TyDenote.toType (ts.map (fun _ => InstCombine.Ty.bitvec 64)))
-  : HVector TyDenote.toType (ts.map (fun _ => toRISCV.Ty.bv)) :=
+  : HVector TyDenote.toType (ts.map (fun _ => RISCV64.Ty.bv)) :=
   h.map (fun v => Option.get! v)
 
 
