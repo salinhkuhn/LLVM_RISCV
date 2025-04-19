@@ -1,15 +1,24 @@
+/-
+  This file contains the definition of a RISC-V Mlir style dialect
+  using RISC-V semantics extracted from
+  :TO DO SAIL
+  The semantics of the RISC-V operations are proven to adhere to their specification in the
+  Sail-Lean-RISC-V modell.
+
+  The RISC-V dialect covers the RISC-V base ISA instructions as well as operations from the ZBB and ZBA extensions.
+  to do add link
+-/
+
 import SSA.Core.MLIRSyntax.EDSL
-
 set_option maxHeartbeats 1000000000000000000
+
+/-!
+  ## Dialect semantics
+  Every ISA instruction is modelled to operate on 64-bit bit vectors only.
+  This should allow to gain in automation using the bv_decide.
+-/
+
 namespace RV64
-
-
-structure mul_op where
-  high : Bool
-  signed_rs1 : Bool
-  signed_rs2 : Bool
-  deriving BEq, DecidableEq, Repr
-
 
 def ADDIW_pure64 (imm : BitVec 12) (rs1_val : BitVec 64) :  BitVec 64 :=
      BitVec.signExtend 64 (BitVec.setWidth 32 (BitVec.add (BitVec.signExtend 64 imm) rs1_val))
@@ -24,7 +33,6 @@ def UTYPE_pure64_AUIPC (imm : BitVec 20) (pc : BitVec 64)  : BitVec 64 :=
 
 def SHIFTIWOP_pure64_RISCV_SLLIW (shamt : BitVec 5) (rs1_val : BitVec 64) : BitVec 64 :=
     BitVec.signExtend 64 (BitVec.shiftLeft (BitVec.extractLsb' 0 32 rs1_val) (shamt).toNat)
-
 
 -- logical rightshift, filled with zeros x/2^s rounding down
 def SHIFTIWOP_pure64_RISCV_SRLIW (shamt : BitVec 5) (rs1_val : BitVec 64) : BitVec 64 :=
@@ -353,15 +361,6 @@ BitVec.signExtend 64
  def ZBB_RTYPE_pure64_RISCV_ROR (rs2_val : BitVec 64) (rs1_val : BitVec 64) :=
       BitVec.or (BitVec.ushiftRight rs1_val (BitVec.extractLsb 5 0 rs2_val).toNat)
     (BitVec.shiftLeft rs1_val ((BitVec.extractLsb' 0 6 (BitVec.ofInt (7) (64)) - BitVec.extractLsb 5 0 rs2_val)).toNat)
-
-
---def const_func (val : BitVec 64) := val
-/-
-
-
-
--/
-
 /-
 |binv
 |bset
@@ -369,34 +368,31 @@ BitVec.signExtend 64
 |bexti
 |binvi
 |bseti
-
-
 |sext.b
 |sext.h
 |zext.h
 |rolw
 |rorw
+-/
+end RV64
 
-
-
-
+/-!
+  ## The `RISCV64` dialect
 -/
 
-end RV64
---finished defining the semantics
-
-namespace toRISCV
--- describing the mapping from MLIR syntax to the Comb semantics
-
+namespace RISCV64
 section Dialect
 
---defining operations of my dialect
---encoding the operations such that my input arguements are only the registers
+/-!
+## Dialect operation definitions
+  Modelled operations such that their inputs arguments are up to two register content values. Any other attributes e.g flags
+  are encoded as part of the op-code.
 
-
+  Modells base ISA & ZBA/ZBB extension instructions.
+-/
 inductive Op
-|const : (val : Int) → Op -- newly added
-|addiw (imm : BitVec 12) --not sure if I should encode immediates but I dont think so
+|const : (val : Int) → Op -- const is not part of the RISC-V ISA but is used to in this dialect to modell immediates.
+|addiw (imm : BitVec 12) -- TO DO: rethink this design
 |lui (imm : BitVec 20)
 |auipc (imm : BitVec 20)
 |slliw (shamt : BitVec 5)
@@ -469,36 +465,48 @@ inductive Op
 |sh1add
 |sh2add
 |sh3add -/
-deriving DecidableEq, Repr --ASK: DecidableEq, Repr --to be able to print as string, cmp and have default value
+deriving DecidableEq, Repr
 
---defining the MLIR types
-inductive Ty -- here belongs what my operations operate on
+
+/--
+## Dialect type definitions
+Defining a type system for the `RISCV64` dialect. `bv` represents bit vector.
+-/
+inductive Ty
   | bv : Ty
-  -- maybe add more in the future
   deriving DecidableEq, Repr
 
--- connecting the MLIR operations and types to their semantics
-
---def HVector.denote : {d : Dialect} → TyDenote (Dialect.Ty d) → ...
--- TyDenote (Dialect.Ty d) give me the way to interpret the types into actual semantics and Ty is the type of types in the lanugae
--- how Lean should interpet these types of dialects d
+/-!
+Connecting the `bv` type to its underlying Lean type `BitVec 64`. By providing a `TyDenote` instance,
+we define how the `RISCV64` types transalte into actual Lean types.
+-/
 open TyDenote (toType) in
 instance RV64TyDenote : TyDenote Ty where
 toType := fun
 | Ty.bv => BitVec 64
 
-
-abbrev RV64 : Dialect where
-  Op := Op -- define the avaiable operations
-  Ty := Ty -- define the avaiable types
-
+/--
+Provding a default instance for `bv`, which is a 64-bit zero bit vector.
+-/
 instance : Inhabited (TyDenote.toType (t : Ty)) where
   default := by
     cases t
     exact (0#64)
 
+
+/--
+## Dialect operation definitions
+
+Specifing the signature of each `RISCV64` operation. `Sig` refers to the input types
+for each operation as a list of types.
+
+We mark it as `simp` and `reducible` such that the type checker and elaborator
+always fully unfold an `sig` to its underlying defintion and when the simplifier
+encounters a `sig` it can replace it by its definition.
+-/
+
 @[simp, reducible]
-def Op.sig : Op → List Ty -- did the signature accroding to the execution functions above
+def Op.sig : Op → List Ty
   |.const _ =>  []
   |.mulu  => [Ty.bv, Ty.bv]
   |mulh  => [Ty.bv, Ty.bv]
@@ -507,16 +515,16 @@ def Op.sig : Op → List Ty -- did the signature accroding to the execution func
   |divu =>  [Ty.bv, Ty.bv]
   |rol => [Ty.bv, Ty.bv]
   |ror => [Ty.bv, Ty.bv]
-  |.remwu  => [Ty.bv, Ty.bv] -- to indicate if signed or not
+  |.remwu  => [Ty.bv, Ty.bv]
   |.remu  =>  [Ty.bv, Ty.bv]
-  |.addiw (imm : BitVec 12) => [Ty.bv] -- specifying the input argument types
-  |.lui (imm : BitVec 20) => [Ty.bv] -- Ty.bv 20 as the immediate
-  |.auipc (imm : BitVec 20)  => [Ty.bv] --Ty.bv 20,as the immediate
-  |.slliw (shamt : BitVec 5)  => [Ty.bv] --Ty.bv 5 shift amount
-  |.srliw (shamt : BitVec 5) => [Ty.bv] -- Ty.bv 5,
-  |.sraiw (shamt : BitVec 5) => [Ty.bv] --Ty.bv 5,
-  |.slli (shamt : BitVec 6) => [Ty.bv] --Ty.bv 6
-  |.srli (shamt : BitVec 6) => [Ty.bv] --Ty.bv 6,
+  |.addiw (imm : BitVec 12) => [Ty.bv]
+  |.lui (imm : BitVec 20) => [Ty.bv]
+  |.auipc (imm : BitVec 20)  => [Ty.bv]
+  |.slliw (shamt : BitVec 5)  => [Ty.bv]
+  |.srliw (shamt : BitVec 5) => [Ty.bv]
+  |.sraiw (shamt : BitVec 5) => [Ty.bv]
+  |.slli (shamt : BitVec 6) => [Ty.bv]
+  |.srli (shamt : BitVec 6) => [Ty.bv]
   |srai (shamt : BitVec 6) => [Ty.bv]
   |.addw => [Ty.bv, Ty.bv]
   |.subw => [Ty.bv, Ty.bv]
@@ -533,7 +541,7 @@ def Op.sig : Op → List Ty -- did the signature accroding to the execution func
   |.srl => [Ty.bv, Ty.bv]
   |.sub => [Ty.bv, Ty.bv]
   |.sra => [Ty.bv, Ty.bv]
-  |.remw  => [Ty.bv, Ty.bv] -- to indicate if signed or not
+  |.remw  => [Ty.bv, Ty.bv]
   |.rem  =>  [Ty.bv, Ty.bv]
   |.mul => [Ty.bv, Ty.bv]
   |.mulw => [Ty.bv, Ty.bv]
@@ -562,8 +570,14 @@ def Op.sig : Op → List Ty -- did the signature accroding to the execution func
   |rolw => [Ty.bv, Ty.bv]
   |rorw => [Ty.bv, Ty.bv]
 
-@[simp, reducible] -- reduceable means this expression can always be expanded by the type checker when type checking
-def Op.outTy : Op  → Ty --- dervied from the ouput of the execution function
+
+/--
+Specifing the `outTy` of each `RISCV64` operation.
+Again, we mark  it as `simp` and `reducible`.
+-/
+
+@[simp, reducible]
+def Op.outTy : Op  → Ty
   |.const _ => Ty.bv
   |.mulu  => Ty.bv
   |.mulh  => Ty.bv
@@ -572,9 +586,9 @@ def Op.outTy : Op  → Ty --- dervied from the ouput of the execution function
   |.divu =>  Ty.bv
   |.rol => Ty.bv
   |.ror => Ty.bv
-  |.remwu  => Ty.bv-- to indicate if signed or not
+  |.remwu  => Ty.bv
   |.remu  =>  Ty.bv
-  |.addiw (imm : BitVec 12) => Ty.bv -- specifying the input argument types
+  |.addiw (imm : BitVec 12) => Ty.bv
   |.lui (imm : BitVec 20) => Ty.bv
   |.auipc (imm : BitVec 20) => Ty.bv
   |.slliw (shamt : BitVec 5) => Ty.bv
@@ -598,7 +612,7 @@ def Op.outTy : Op  → Ty --- dervied from the ouput of the execution function
   |.srl => Ty.bv
   |.sub => Ty.bv
   |.sra => Ty.bv
-  |.remw  => Ty.bv-- to indicate if signed or not
+  |.remw  => Ty.bv
   |.rem =>  Ty.bv
   |.mul => Ty.bv
   |.mulw => Ty.bv
@@ -626,22 +640,36 @@ def Op.outTy : Op  → Ty --- dervied from the ouput of the execution function
   |bseti (shamt : BitVec 6) => Ty.bv
   |rolw => Ty.bv
   |rorw => Ty.bv
-/---def ADDIW_pure64_BitVec (imm : BitVec 12) (rs1_val : BitVec 64) :  BitVec 64 :=
-     --BitVec.signExtend 64 (BitVec.setWidth 32 (BitVec.add (BitVec.signExtend 64 imm) rs1_val))-/
 
 
-
---ASK what exatlcy does this ? does it just create an Op signature ?
+/-- Combine `outTy` and `sig` together into a `Signature`. -/
 @[simp, reducible]
 def Op.signature : Op → Signature (Ty) :=
   fun o => {sig := Op.sig o, outTy := Op.outTy o, regSig := []} --ASK what is meant by regSig ?
 
--- signsture requeired by the DialectSignature typeclass is provided via <Op.signature>
-instance : DialectSignature RV64 := ⟨Op.signature⟩
 
+
+/--
+Bundling the `Ops`and `Ty`into a dialect and abbreviating `RISCV64` into a dialect named `RV64`.
+We pass our `Op.signature` as an instance -/
+abbrev RV64 : Dialect where
+  Op := Op
+  Ty := Ty
+
+instance : DialectSignature RV64 := ⟨Op.signature⟩
 
 -- DEBUG: only addapted the get0 get1 of the instruction that where used in the insteuction selcetion so far, to be extended
 -- I assume the layout is add (then all the args in the op code) (then args in the signature) ret_val
+
+/--
+## Dialect semantics
+
+We assign semantics defined in `RV64` to each operation. This defines the meaning of each operation in Lean.
+
+When writting RISC-V-like abstract MLIR ISA intutivly we write `op  arg1 arg2`. The `RISCV64` are defined to
+first process the second operand then the first. Therefore we first pass `.get 1` then `.get 0` into the
+functions that define our semantics.
+-/
 @[simp, reducible]
 instance : DialectDenote (RV64) where
   denote
@@ -712,10 +740,16 @@ instance : DialectDenote (RV64) where
   |.ror, regs, _ => RV64.ZBB_RTYPE_pure64_RISCV_ROR (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
 
 end Dialect
+
+
+
+
+
+
 -- for using it in rewrites to directly use com
 def const {Γ : Ctxt _} (n : ℤ) : Expr RV64 Γ .pure .bv  :=
   Expr.mk
-    (op := toRISCV.Op.const n)
+    (op := RISCV64.Op.const n)
     (eff_le := by constructor)
     (ty_eq := rfl)
     (args := .nil)
@@ -724,7 +758,7 @@ def const {Γ : Ctxt _} (n : ℤ) : Expr RV64 Γ .pure .bv  :=
 -- alterantive would work :: Γ.Var .bv
 def add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
   Expr.mk
-    (op := toRISCV.Op.add)
+    (op := RISCV64.Op.add)
     (eff_le := by constructor)
     (ty_eq := rfl)
     (args := .cons e₁ <| .cons e₂ .nil)
@@ -732,7 +766,7 @@ def add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
 
 def sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
   Expr.mk
-    (op := toRISCV.Op.sub)
+    (op := RISCV64.Op.sub)
     (eff_le := by constructor)
     (ty_eq := rfl)
     (args := .cons e₁ <| .cons e₂ .nil) -- debug
@@ -740,7 +774,7 @@ def sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
 
 def and {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
   Expr.mk
-    (op := toRISCV.Op.and)
+    (op := RISCV64.Op.and)
     (eff_le := by constructor)
     (ty_eq := rfl)
     (args := .cons e₁ <| .cons e₂ .nil)
@@ -1303,4 +1337,4 @@ open Qq MLIR AST Lean Elab Term Meta in
 elab "[RV64_com| " reg:mlir_region "]" : term => do
   SSA.elabIntoCom reg q(RV64)
 
-end toRISCV
+end RISCV64

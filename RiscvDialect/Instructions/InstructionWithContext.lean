@@ -113,11 +113,11 @@ def OR_RV64 :=
     %v1 = "RV64.or" (%X, %Y) : (!i64, !i64) -> (!i64)
     "return" (%v1) : (!i64, !i64) -> ()
   }].denote
--- disjoint and normal or
+
 def OR_LLVM :=
   [llvm(64)| {
   ^bb0(%X : i64, %Y : i64):
-      %v1 = llvm.or %Y, %X : i64 -- handle disjoint flag
+      %v1 = llvm.or %Y, %X : i64
       llvm.return %v1 : i64
   }].denote
 
@@ -283,7 +283,7 @@ theorem translation_urem  (x3 x4: BitVec 64) :
   unfold RV64.REM_pure64_unsigned lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
   simp [Ctxt.Valuation.ofHVector]
-  native_decide 
+  native_decide
   intro h
   split at h
   · contradiction

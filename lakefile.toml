@@ -1,5 +1,6 @@
 name = "RiscvDialect"
 version = "0.1.0"
+
 defaultTargets = ["RiscvDialect"]
 
 [[lean_lib]]
@@ -8,9 +9,13 @@ name = "RiscvDialect"
 [[require]]
 name = "SSA"
 git = "https://github.com/opencompl/lean-mlir.git"
-rev = "main"
+rev = "simp-denote"
 
 [[require]]
 name = "Lean_RV64D_LEAN"
 git = "https://github.com/opencompl/sail-riscv-lean.git"
 rev = "forSarah"
+
+[[lean_exe]]
+name = "RiscvDialectExe"
+root = "RiscvDialect"

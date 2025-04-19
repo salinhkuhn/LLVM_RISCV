@@ -146,11 +146,6 @@ def binOpHom_i_to_i (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv)
 
 
 
-
-
-
-
-
 -- mapping with inverted context correspondance
 -- [x1, x2] --> [%X, %Y] such that  x1.get = %Y, x2.get =%X
 def binOpHom_i_to_modi (vΔ: Ctxt.Var [toRISCV.Ty.bv, toRISCV.Ty.bv] toRISCV.Ty.bv) :

@@ -4,6 +4,9 @@ import SSA.Core.ErasedContext
 import SSA.Core.HVector
 import SSA.Core.EffectKind
 import SSA.Core.Util
+import RiscvDialect.RISCV64.Syntax
+import RiscvDialect.RISCV64.Base
+import RiscvDialect.RISCV64.Semantics
 import RiscvDialect.RDialect
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
 --import SSA.Projects.InstCombine.Refinement
@@ -33,8 +36,6 @@ import SSA.Projects.DCE.DCE
 import Mathlib.Tactic.Ring
 open MLIR AST in
 
-open RV64
-open toRISCV
 open DCE
 
 -- additional lemmas introduced for the proofs.
@@ -73,9 +74,9 @@ def rhs_and0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
 theorem peephole01 : (rhs_and0  ⊑ᵣ lhs_and0) := by
   unfold lhs_and0 rhs_and0
   simp_alive_peephole
-  simp only [BitVec.ofInt_ofNat]
+  simp
   unfold RV64.RTYPE_pure64_RISCV_AND
-  simp only [BitVec.and_eq, BitVec.and_zero, forall_const]
+  simp
   unfold RiscvInstrSeqRefines
   rfl
 
@@ -95,7 +96,7 @@ def rewrite_and0 : PeepholeRewrite RV64 [.bv] .bv :=
     correct :=
     by
         funext Γv
-        simp_peephole at Γv
+        simp_peephole
         simp
         unfold RV64.RTYPE_pure64_RISCV_AND
         bv_decide
@@ -196,8 +197,8 @@ def rewrite_add0 : PeepholeRewrite RV64 [.bv] .bv :=
 }],
     correct :=
     by
-        funext Γv
-        simp_peephole at Γv
+        --funext Γv
+        simp_peephole --using Γv
         simp
         unfold RV64.RTYPE_pure64_RISCV_ADD
         bv_decide
@@ -359,6 +360,8 @@ def checkRewriteWasAsExpected : egLhs_rewritePeepholeRecrusivly4 = Com.var  (con
 
 
 
+@[simp_denote] lemma toType_bv :
+  TyDenote.toType (.bv : RV64.Ty) = BitVec 64 := rfl
 
 
 -- add rd rs1 rs1 <-> slli rd rs1 $1
@@ -393,8 +396,8 @@ def rewrite_02 : PeepholeRewrite RV64 [.bv] .bv :=
     }],
     correct :=
     by
-        funext Γv
-        simp_peephole at Γv
+        --funext Γv
+        simp_peephole --using Γv
         simp
         unfold RV64.SHIFTIOP_pure64_RISCV_SLLI RV64.RTYPE_pure64_RISCV_ADD
         bv_decide
@@ -422,8 +425,8 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
   }],
     correct :=
     by
-        funext Γv
-        simp_peephole at Γv
+        -- funext Γv
+        simp_peephole --using Γv depending on branch the new tactic is avaible or not.
         simp
         unfold RV64.RTYPE_pure64_RISCV_ADD  RV64.SHIFTIOP_pure64_RISCV_SLLI
         simp
@@ -445,8 +448,8 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       %1 = "RV64.slli" (%0) { shamt = 2 : !i64 } : ( !i64) -> (!i64)
       "return" (%1) : ( !i64 ) -> ()
   }].denote := by
-    funext Γv
-    simp_peephole at Γv
+    -- funext Γv
+    simp_peephole --using Γv
     simp
     unfold RV64.RTYPE_pure64_RISCV_ADD RV64.SHIFTIOP_pure64_RISCV_SLLI
     simp [BitVec.add_eq, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod, BitVec.shiftLeft_eq]
@@ -471,8 +474,8 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
       "return" (%1) : ( !i64 ) -> ()
   }].denote := by
-      funext Γv
-      simp_peephole at Γv
+      -- funext Γv
+      simp_peephole --  using Γv
       simp
       unfold RV64.RTYPE_pure64_RISCV_AND
       bv_decide
@@ -493,8 +496,8 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       %1 = "RV64.slli" (%0) { shamt = 0 : !i64 } : ( !i64) -> (!i64)
       "return" (%1) : ( !i64 ) -> ()
   }].denote := by
-      funext Γv
-      simp_peephole at Γv
+      -- funext Γv
+      simp_peephole -- using Γv
       simp
       unfold RV64.MUL_pure64_fff RV64.SHIFTIOP_pure64_RISCV_SLLI
       intro e
@@ -520,11 +523,10 @@ def rewrite_03 : PeepholeRewrite RV64 [.bv] .bv :=
       ^entry (%r1: !i64, %r2: !i64 ) :
        "return" (%r2) : (!i64 ) -> ()
       }].denote := by
-      funext Γv
-      simp_peephole at Γv
-      simp only [Fin.isValue, HVector.cons_get_zero]
-      intros e s
+      -- funext Γv
+      simp_peephole -- using Γv
       unfold RV64.RTYPE_pure64_RISCV_XOR RV64.RTYPE_pure64_RISCV_SUB
+      intros e1 e2
       show @Eq (BitVec 64) _ _
       --show @Eq (BitVec 64) ((s.sub s).xor e) e
       bv_decide
@@ -550,11 +552,11 @@ def RISCVZero := [RV64_com| {
 theorem xor_eq_zero :
   RISCVEg1 = RISCVZero := by
   unfold RISCVEg1 RISCVZero
-  funext Γv
-  simp_peephole at Γv
+  -- funext Γv
+  simp_peephole -- using Γv
   intro e
   unfold RV64.RTYPE_pure64_RISCV_XOR
-  rw[HVector.cons_get_zero]
+  -- rw[HVector.cons_get_zero]
   show @Eq (BitVec 64) _ _
   bv_decide
 
@@ -596,11 +598,11 @@ def RISCVE_AddSub_opt := [RV64_com| {
 
 theorem RISCV64_AddSub : RISCVE_AddSub_src = RISCVE_AddSub_opt := by
   unfold RISCVE_AddSub_src RISCVE_AddSub_opt
-  funext Γv
-  simp_peephole at Γv
-  intro e
+  --funext Γv
+  simp_peephole --  using Γv
+  -- intro e
   unfold RV64.RTYPE_pure64_RISCV_ADD RV64.SHIFTIOP_pure64_RISCV_SLLI
-  rw [HVector.cons_get_zero, HVector.cons_get_zero]
+  -- rw [HVector.cons_get_zero, HVector.cons_get_zero]
   bv_decide
 
 
@@ -621,11 +623,11 @@ def RISCVE_AddSub1164_opt := [RV64_com| {
 theorem RISCV64_AddSub1164 :
   RISCVE_AddSub1164_src = RISCVE_AddSub1164_opt := by
   unfold RISCVE_AddSub1164_opt RISCVE_AddSub1164_src
-  funext Γv
-  simp_peephole at Γv
+  -- funext Γv
+  simp_peephole --  using Γv
   intro e1 e2
   unfold RV64.RTYPE_pure64_RISCV_ADD RV64.RTYPE_pure64_RISCV_SUB
-  simp [HVector.cons_get_zero]
+  -- simp [HVector.cons_get_zero]
   bv_decide
 
 /-  sub rd1 v1 $0 -- -a
@@ -654,15 +656,13 @@ def RISCVE_AddSub1164_opt2 := [RV64_com| {
 theorem RISCV64_AddSub1164_2 :
   RISCVE_AddSub1164_src2 = RISCVE_AddSub1164_opt2 := by
   unfold RISCVE_AddSub1164_opt2 RISCVE_AddSub1164_src2
-  funext Γv
-  simp_peephole at Γv
+  -- funext Γv
+  simp_peephole --  using Γv
   intro e1 e2
   unfold RV64.RTYPE_pure64_RISCV_SUB RV64.RTYPE_pure64_RISCV_ADD
   simp [HVector.cons_get_zero]
   show @Eq (BitVec 64) _ _
   bv_decide
-
-
 
 def RV64_DivRemOfSelect_src := [RV64_com| {
   ^entry (%c: !i64, %y: !i64, %x: !i64):
@@ -682,15 +682,12 @@ theorem RV64_DivRemOfSelect :
  RV64_DivRemOfSelect_src = RV64_DivRemOfSelect_opt :=
   by
   unfold RV64_DivRemOfSelect_src RV64_DivRemOfSelect_opt
-  funext Γv
-  simp_peephole at Γv
-  simp
+  -- funext Γv
+  simp_peephole -- using Γv
   intro e1 e2
   unfold RV64.ZICOND_RTYPE_pure64_RISCV_RISCV_CZERO_NEZ RV64.DIV_pure64_unsigned
-  simp only [Nat.sub_zero, Nat.reduceAdd, BitVec.zero_eq, ↓reduceIte, BitVec.extractLsb_toNat,
-    Nat.shiftRight_zero, Nat.reducePow, Int.ofNat_eq_coe, Int.ofNat_emod, Nat.cast_ofNat,
-    Int.reduceNeg, Int.ofNat_toNat]
-
+  simp only [BitVec.ofInt_ofNat, BitVec.zero_eq, ↓reduceIte, Int.ofNat_eq_coe, Int.natCast_eq_zero,
+    Int.reduceNeg, implies_true]
 
 def RISCVEgDCE_src := [RV64_com| {
   ^entry (%x1: !i64):
@@ -709,7 +706,7 @@ theorem DCE1 :
   RISCVEgDCE_src = RISCVDCE_opt := by
     unfold RISCVEgDCE_src RISCVDCE_opt
     funext Γv
-    simp_peephole at Γv
+    simp_peephole -- using Γv
 
 
 

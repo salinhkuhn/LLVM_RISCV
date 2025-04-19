@@ -9,13 +9,13 @@ import SSA.Projects.InstCombine.Base
 import SSA.Projects.InstCombine.ForLean
 import RiscvDialect.Instructions.riscv_instructions
 import RiscvDialect.Instructions.llvm_instructions
-import RiscvDialect.Peephole_Optimizations.RISCVRewrites
+
 import Lean
 
 open toRISCV
 open RV64
 open InstCombine (LLVM)
-
+set_option maxHeartbeats 10000000
 /-
 this file contains the actually implementation of the instruction selection.
 we transalte a Com in operating on context of type α and dialect D1 to a com operating on context of type β and dialect D2.
@@ -128,6 +128,178 @@ match e with
   |e => Expr.mk (toRISCV.Op.const 0) (eff_le := by constructor) (ty_eq := rfl) (.nil) (.nil)
 -- !!!!!! check operator order in llvm vs riscv not modelled the same espeically for div and rem etc.
 
+
+/- this function describes how to create a valuation for the riscv context given a valuation for the llvm contex.
+Since our mapping is is one to one, we map the index one to one because it is constructed that way during the lowering process.
+If the LLVM context contains a none, we map it to zero in the LLVM context.
+ -/
+
+/-
+this creates a RISC-V valuation given a LLVM valuation. Valuation is a function that takes in a type t and a variable
+and returns an element that has the corresponding type and is specified by the valuation.
+-/
+open InstCombine (Ty) in
+def LLVMValuationToRV {Γ : Ctxt LLVM.Ty} (V : Γ.Valuation) : (LLVMCtxtToRV Γ).Valuation :=
+  fun t v => -- A valuation is a function that takes in a type and variable (index and proof that it has the correspondig type) and returns an value of the correct type.
+    match t with
+    | .bv =>
+      let i : Fin Γ.length := ⟨v.1, by -- extract information from the llvm variable
+          simpa [LLVMCtxtToRV, List.getElem?_eq_some_iff ] using v.prop
+       ⟩ -- this is a simplification for simp [...] at using h where we defined h to be v.prop
+      match h : Γ.get i with -- trick to get a let binding into the list of things we know.
+      | Ty.bitvec w =>
+           let (v' : Γ.Var (Ty.bitvec w)) := ⟨v.1, by
+              simpa [List.getElem?_eq_some_iff,i, i.prop] using h
+        ⟩
+        (V v' : LLVM.IntW w).getD 0#_ |>.setWidth 64 -- return the underlying val where some val else hard code poison values to zero.
+-- here with extract the value of the llvm variable and if the value is a none with convert it to zero bitvector.We then set the width to 64 bits.
+
+/-
+other version of the proof
+      match h : Γ.get i with
+      | Ty.bitvec w =>
+        let (v' : Γ.Var (Ty.bitvec w)) := ⟨v.1, by
+            have h_lt : v.1 < _ := i.prop
+            simpa [List.getElem?_eq_some_iff, h_lt] using h
+            ⟩
+        (V v' : LLVM.IntW w).getD 0#_ |>.setWidth 64 -- return the underlying val where some val else hard code poison values to zero.
+
+
+
+-/
+
+/-want to prove that for all InstCombine.Op for which isOneToOne (op) == true, we have that
+lowerSimpleIRInstruction_correct
+
+extend the statement to: ∀ e,  (isOneToOne e) → ∀ x, (e.denote V) = some x → (lowerSimpleIRInstruction e).denote (LLVMValuationToRV V) = x
+
+ -/
+
+theorem lowerSimpleIRInstruction_correct
+    (e : Expr LLVM Γ .pure (.bitvec 64)) (V : Γ.Valuation) :
+    ∀ x, (e.denote V) = some x → (lowerSimpleIRInstruction e).denote (LLVMValuationToRV V) = x := by
+  intros x h1
+  rcases e with ⟨op1, ty_eq1, eff_le1,args1, regionArgs1⟩
+  case mk =>
+    cases op1
+    case unary w op =>
+      cases op
+      /- case neg => sorry
+      case not => sorry
+      case copy => sorry
+      case trunc => sorry
+      case zext => sorry
+      case sext => sorry-/
+    case binary w op =>
+      cases op
+      case and =>
+        simp at ty_eq1
+        unfold DialectSignature.outTy at ty_eq1
+        simp at ty_eq1
+        simp [signature] at ty_eq1
+        subst ty_eq1
+        simp [lowerSimpleIRInstruction]
+        unfold DialectSignature.sig at args1
+        simp at args1
+        simp [signature] at args1
+        unfold DialectSignature.effectKind at eff_le1
+        simp at eff_le1
+        simp only [signature, InstCombine.MOp.sig, InstCombine.MOp.outTy, le_refl,
+          EffectKind.pure_le] at eff_le1
+        -- simp_peephole at h1 when apply these the whole hyptohesis h vanishes
+        simp [signature ] at ty_eq1
+        simp_peephole at h1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        -- simp only [signature, InstCombine.MOp.sig, InstCombine.MOp.outTy] at eff_le --didnt simp any further yet
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /-
+      case or => sorry
+      case xor => sorry
+      case shl => sorry
+      case lshr => sorry
+      case ashr => sorry
+      case urem => sorry
+      case srem => sorry
+      case add => sorry
+      case mul => sorry
+      case sub => sorry
+      case sdiv => sorry
+      case udiv => sorry
+    case select => sorry
+    case icmp => sorry
+    case const => sorry
+-/
 #check Ctxt.Hom
 
 #check Ctxt.snoc
@@ -138,11 +310,15 @@ match e with
 
 /- -TO DO: implement prepending of one computation onto antoher computation
 this function preprends a computation onto another computation => to do : think of how to do this -/
+/-
+preprends a computation e to a computation body.
+the computation body must then still be well typed under the context where we have the let bindings introduced by the com e.
+-/
 variable {d : Dialect} [DialectSignature d] in
 def Com.prependCom (e : Com d Γ eff α) (body : Com d (Γ.snoc α) eff β) : Com d Γ eff β :=
   go .id e
 where
-  go {Δ} (f : Γ.Hom Δ) : Com d Δ eff α → Com d Δ eff β
+  go {Δ} (f : Γ.Hom Δ) : Com d Δ eff α → Com d Δ eff β -- the homomorphism the mapping from how the variables in Γ are to be found in Δ
     | Com.var e' body' => Com.var e' (go (f.snocRight) body')
     | Com.ret returnVar =>
         -- Δ = Γ ++ ...
@@ -150,11 +326,12 @@ where
           by
             cases v
             next v => exact f v
-            next   => exact returnVar
+            next v  => exact returnVar
 
 #check Com.var
 #check Com.changeVars
 
+/-
 variable {d : Dialect} [DialectSignature d] in
 def Com.prependCom2 (e : Com d Γ eff α) (body : Com d (Γ.snoc α) eff β) : Com d Γ eff β :=
   /-
@@ -168,7 +345,7 @@ def Com.prependCom2 (e : Com d Γ eff α) (body : Com d (Γ.snoc α) eff β) : C
   | Com.var expr (Com.ret _) => Com.var expr (body) -- also not sure if the context is to long here now
   | Com.var expr (nonret) => Com.var expr (go nonret)
   |_ => sorry
-
+-/
 /- the still need to shift the indicies -/
   /-
     travers the com until the return statement, replace the return statement with the body ?
@@ -208,7 +385,7 @@ def lowerDecomposableIR  : (e : Expr LLVM Γ .pure (.bitvec 64)) →  Com RV64 (
 -- TO DO: unsure if like this modelling as an option, makes things not that pretty.
 -- THIS FUNCTION ONLY SUPPORTS ONE TO ONE LOWERINGS
 -- if we return a none then we must have an invalid input or the computation must have failed,
-def loweringLLVMtoRISCV : {Γ : Ctxt LLVM.Ty} → (com : Com LLVM Γ .pure (.bitvec 64)) → Option (Com RV64 (LLVMCtxtToRV Γ)  .pure (.bv))
+/-def loweringLLVMtoRISCV : {Γ : Ctxt LLVM.Ty} → (com : Com LLVM Γ .pure (.bitvec 64)) → Option (Com RV64 (LLVMCtxtToRV Γ)  .pure (.bv))
   | _, Com.ret x  =>  some (Com.ret (LLVMVarToRV x))
   | _, Com.var (α := InstCombine.Ty.bitvec 64) e c' =>
         let e' := (lowerSimpleIRInstruction e) -- map the expression to a riscv expression
@@ -217,10 +394,10 @@ def loweringLLVMtoRISCV : {Γ : Ctxt LLVM.Ty} → (com : Com LLVM Γ .pure (.bit
         | none => none
   | _, Com.var (α := InstCombine.Ty.bitvec _) _ _ =>
       none
-
+-/
 def isOneToOne (expr : Expr LLVM Γ .pure (.bitvec 64)) :=
   match expr.op  with
-  | InstCombine.Op.neg 64 => false
+  | InstCombine.Op.neg 64 | InstCombine.Op.not 64 | InstCombine.Op.copy 64  => false
   |_ => true
 
 /-
@@ -431,54 +608,96 @@ def riscv_neg :=
     "return" (%v2) : (!i64, !i64) -> ()
   }]
 
+def llvm_not :=
+    [llvm(64)| {
+      ^bb0(%X : i64):
+      %v1 = llvm.not %X :i64
+      llvm.return %v1 : i64
+  }]
+
+def riscv_not :=
+  [RV64_com| {
+    ^entry (%X: !i64):
+    %v1 = "RV64.const" () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
+    %v2 = "RV64.xor" ( %v1, %X) : (!i64, !i64) -> (!i64)
+    "return" (%v2) : (!i64, !i64) -> ()
+  }]
+
 def riscv_const_add :=
   [RV64_com| {
     ^entry (%X: !i64):
-    %v1 = "RV64.const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+    %v1 = "RV64.const" () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
     %v2 = "RV64.add" (%X, %v1) : (!i64, !i64) -> (!i64)
     "return" (%v2) : (!i64, !i64) -> ()
   }]
 
+  def llvm_const_add_neg_add :=
+      [llvm(64)| {
+      ^bb0(%X : i64):
+      %v1 = llvm.mlir.constant 123848392 :i64
+      %v2 = llvm.add %X, %v1 :i64
+      %v3 = llvm.neg %X :i64
+      %v4 = llvm.add %v2, %v1 :i64
+      llvm.return %v4 : i64
+  }]
 
+  def riscv_const_add_neg_add :=
+      [RV64_com| {
+      ^bb0(%X : !i64):
+      %v1 = "RV64.const " () { val = 123848392 : !i64 } : (!i64, !i64) -> (!i64)
+      %v2 = "RV64.add" (%X, %v1) : (!i64, !i64) -> (!i64)
+      %v3 = "RV64.const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+      %v4 = "RV64.sub" (%v3, %X) : (!i64, !i64) -> (!i64)
+      %v = "RV64.add" (%v2, %v1) : (!i64, !i64) -> (!i64)
+      "return" (%v) : (!i64, !i64) -> ()
+  }]
 
+  def llvm_only_many :=
+      [llvm(64)| {
+      ^bb0(%X : i64, %Y : i64):
+      %v3 = llvm.neg %X :i64
+      %v4 = llvm.not %Y :i64
+      %v5 = llvm.not %X :i64
+      llvm.return %v4 : i64
+  }]
 
-def realLLVMexample :=
-    --llvm.func local_unnamed_addr @add_64(%arg0: i64 {llvm.noundef}, %arg1: i64 {llvm.noundef}) -> i64 attributes {frame_pointer = #llvm.framePointerKind<"non-leaf">, memory = #llvm.memory_effects<other = none, argMem = none, inaccessibleMem = none>, no_unwind, passthrough = ["mustprogress", "nofree", "norecurse", "nosync", "ssp", ["uwtable", "1"], ["no-trapping-math", "true"], ["stack-protector-buffer-size", "8"], ["target-cpu", "apple-m1"]], target_cpu = "apple-m1", target_features = #llvm.target_features<["+aes", "+altnzcv", "+ccdp", "+ccidx", "+complxnum", "+crc", "+dit", "+dotprod", "+flagm", "+fp-armv8", "+fp16fml", "+fptoint", "+fullfp16", "+jsconv", "+lse", "+neon", "+pauth", "+perfmon", "+predres", "+ras", "+rcpc", "+rdm", "+sb", "+sha2", "+sha3", "+specrestrict", "+ssbs", "+v8.1a", "+v8.2a", "+v8.3a", "+v8.4a", "+v8a", "+zcm", "+zcz"]>, will_return} {
-    [llvm(64)| {
-      ^bb0 (%arg0: i64 , %arg1: i64):
-    %0 = llvm.add %arg1, %arg0 overflow<nsw> : i64
-    llvm.return %0 : i64
-    }]
-
-def realRISCVadd :=
-  [RV64_com| {
-    ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.add" (%Y, %X) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+  def riscv_only_many :=
+      [RV64_com| {
+      ^bb0(%reg1 : !i64, %reg2 : !i64):
+      %v1 = "RV64.const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+      %v2 = "RV64.sub" (%v1, %reg1) : (!i64, !i64) -> (!i64)
+      %v3 = "RV64.const " () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
+      %v4 = "RV64.xor"  (%v3, %reg2) : (!i64, !i64) -> (!i64)
+      %v5 = "RV64.const " () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
+      %v6 = "RV64.xor" (%v5, %reg1) : (!i64, !i64) -> (!i64)
+      "return" (%v4) : (!i64, !i64) -> ()
   }]
 
 
-def loweringrealLLVMexample :  loweringLLVMtoRISCV realLLVMexample = some (realRISCVadd) := by native_decide
 
+def loweringMixedExample : loweringLLVMtoRISCVextended llvm_const_add_neg_add = some (riscv_const_add_neg_add):= by native_decide
 
+def loweringOnlyManyExample : loweringLLVMtoRISCVextended llvm_only_many = some (riscv_only_many):= by native_decide
 
 -- TEST LOWERINGS FOR THE ONE TO ONE LOWERING
 --def loweringLLVMNegAsExpected :  loweringLLVMtoRISCV (llvm_neg) = some (riscv_neg) := by native_decide :: not supported because requires many to many lowering
 -- checking that the lowering yield code as expected
-def loweringLLVMAddAsExpected : loweringLLVMtoRISCV llvm_add = some (riscv_add) := by native_decide
-def loweringLLVMSubExpected : loweringLLVMtoRISCV llvm_sub1 = some (riscv_sub1) := by native_decide
-def loweringLLVMDoubleAddAsExpected : loweringLLVMtoRISCV llvm_add_add = some (riscv_add_add) := by native_decide
-def loweringLLVMAddSubAsExpected : loweringLLVMtoRISCV llvm_add_sub = some (riscv_add_sub) := by native_decide
-def loweringConstAdd : loweringLLVMtoRISCV llvm_const_add = some (riscv_const_add) := by native_decide
-def loweringLLVMSDivAsExpected : loweringLLVMtoRISCV llvm_sdiv = some (riscv_sdiv) := by native_decide
-def loweringLLVMUDivAsExpected : loweringLLVMtoRISCV llvm_udiv = some (riscv_udiv) := by native_decide
-def loweringLLVMSRemAsExpected : loweringLLVMtoRISCV llvm_srem = some (riscv_srem) := by native_decide
-def loweringLLVMSUemAsExpected : loweringLLVMtoRISCV llvm_urem = some (riscv_urem) := by native_decide
+def loweringLLVMAddAsExpected : loweringLLVMtoRISCVextended llvm_add = some (riscv_add) := by native_decide
+def loweringLLVMSubExpected : loweringLLVMtoRISCVextended llvm_sub1 = some (riscv_sub1) := by native_decide
+def loweringLLVMDoubleAddAsExpected : loweringLLVMtoRISCVextended llvm_add_add = some (riscv_add_add) := by native_decide
+def loweringLLVMAddSubAsExpected :loweringLLVMtoRISCVextended llvm_add_sub = some (riscv_add_sub) := by native_decide
+def loweringConstAdd : loweringLLVMtoRISCVextended llvm_const_add = some (riscv_const_add) := by native_decide
+def loweringLLVMSDivAsExpected : loweringLLVMtoRISCVextended llvm_sdiv = some (riscv_sdiv) := by native_decide
+def loweringLLVMUDivAsExpected : loweringLLVMtoRISCVextended llvm_udiv = some (riscv_udiv) := by native_decide
+def loweringLLVMSRemAsExpected : loweringLLVMtoRISCVextended llvm_srem = some (riscv_srem) := by native_decide
+def loweringLLVMSUemAsExpected : loweringLLVMtoRISCVextended llvm_urem = some (riscv_urem) := by native_decide
 
-def loweringLLVMShlAsExpected : loweringLLVMtoRISCV llvm_shl = some (riscv_sll) := by native_decide
-def loweringLLVMSraAsExpected : loweringLLVMtoRISCV llvm_ashr = some (riscv_sra) := by native_decide
-def loweringLLVMSlrAsExpected : loweringLLVMtoRISCV llvm_lshr = some (riscv_slr) := by native_decide
-def loweringLLVMConstAsExpected : loweringLLVMtoRISCV (llvm_const) = some (riscv_const) := by native_decide
+def loweringLLVMAsExpected : loweringLLVMtoRISCVextended  llvm_not = some (riscv_not) := by native_decide
+
+def loweringLLVMShlAsExpected : loweringLLVMtoRISCVextended llvm_shl = some (riscv_sll) := by native_decide
+def loweringLLVMSraAsExpected : loweringLLVMtoRISCVextended llvm_ashr = some (riscv_sra) := by native_decide
+def loweringLLVMSlrAsExpected : loweringLLVMtoRISCVextended llvm_lshr = some (riscv_slr) := by native_decide
+def loweringLLVMConstAsExpected : loweringLLVMtoRISCVextended (llvm_const) = some (riscv_const) := by native_decide
 
 
 
