@@ -8,6 +8,13 @@ import SSA.Projects.InstCombine.ForLean
 /-! This file defines a pretty printing/syntax for the `RISCV64` dialect.
 The goal is the be able to write `RISCV-64` IR in a very assembly like manner.
 
+[RV64_com| {
+  ^bb0(%r1 : !i64, %r2 : !i64 ):
+  %1 =  const (0) : !i64
+  %2 =  sub %r1,  %1 : !i64
+        ret %2 : !i64
+
+
 We use the functionalities defined in `SSA.Core.MLIRSyntax.PrettyEDSL`.
 The functionalty implemeted there allows us to write:
 
@@ -200,9 +207,5 @@ private theorem test_rewrite :
     simp_peephole
     simp only [RV64Semantics.RTYPE_pure64_RISCV_SUB, BitVec.ofInt_ofNat, BitVec.sub_eq,
       BitVec.sub_zero, implies_true]
-
-
-
-
 
 #check test_slli
