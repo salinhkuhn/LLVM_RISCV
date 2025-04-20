@@ -667,9 +667,10 @@ def exampleRiscv1 : Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .bv64 :=
   "return" (%1) : ( !r64) -> ()
 }]
 
- DOESNT WORK YET BECAUSE THE REWRITER DOESNT WORK FOR REFINEMENT YET
+ -- DOESNT WORK YET BECAUSE THE REWRITER DOESNT WORK FOR REFINEMENT YET
 -- problem of the peephole rewriter that he doesnt support refinements
 
+/-- this wont typecheck because of the diffrent types within a dialect.
 def loweringViaRewriterWorks :  PeepholeRewrite llvm.riscv ([Ty.opt64]) .opt64 :=
  {lhs := [_| {
   ^entry (%0: !i64 ):
@@ -710,6 +711,6 @@ def testAddLowering : loweringLLVMtoRISCV exampleLLVM1 = some (exampleRiscv1) :=
   "return" (%1) : ( !r64) -> ()
 }], correct := by sorry }
 
-
+-/
 
 -/

@@ -6,7 +6,7 @@ import LeanRV64DLEAN.RiscvExtras
 import LeanRV64DLEAN
 import LeanRV64DLEAN.pure_func
 import RiscvDialect.Dialect
-import RiscvDialect.TacticSail
+-- import RiscvDialect.TacticSail
 
 open Functions
 open Retired

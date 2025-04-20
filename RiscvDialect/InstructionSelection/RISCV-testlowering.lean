@@ -18,7 +18,7 @@ import SSA.Core.MLIRSyntax.GenericParser
 import SSA.Core.MLIRSyntax.EDSL
 import SSA.Projects.InstCombine.Tactic
 import Mathlib.Tactic.Ring
-import RiscvDialect.Peephole_Optimizations.RiscVRefinement
+-- import RiscvDialect.Peephole_Optimizations.RiscVRefinement
 import Qq
 import Lean
 import Mathlib.Logic.Function.Iterate
@@ -30,19 +30,16 @@ import SSA.Core.MLIRSyntax.EDSL
 import SSA.Projects.InstCombine.Tactic
 import SSA.Projects.DCE.DCE
 import Mathlib.Tactic.Ring
-open MLIR AST in
+import RiscvDialect.RISCV64.all
 
-open RISCVExpr
+open MLIR AST
+open RISCV64
 open DCE
+open RISCVExpr
 
 /-- Tthis file contains tools to lowering riscv instructions to other riscv instructions. Also includes a skeleton of
 a verifed lowering from riscv to riscv but where simple just to get familar with how to modell such translations.
 -/
-
-def comSize {Γ : List Ty} (com: Com RV64 Γ .pure .bv ) : Nat :=
-  match com with
-  |Com.ret _ => 1
-  |Com.var _ c' => 1 + comSize c'
 
 
 def transalte (op :RISCV64.Op) : RISCV64.Op :=
@@ -55,30 +52,51 @@ def transalte (op :RISCV64.Op) : RISCV64.Op :=
   | .or => .or
   | _ => op -- add more operations as needed
 
-def instruction_translation_refinement (e : Expr RV64 Γ .pure .bv) : { e' : Expr RV64 Γ .pure .bv //  e.denote = e'.denote } :=
-  match e with
+
+
+#check Ctxt
+#check Expr.mk
+
+def instruction_translation_refinement {Γ : List Ty } (e : Expr RV64 Γ .pure .bv) : { e' : Expr RV64 Γ .pure .bv //  e.denote = e'.denote } :=
+   match e with
   | Expr.mk
-    (add)
+    (.add)
     (_)
     (_)
     (ls)
     (_) =>  ⟨ Expr.mk
-    (op := toRISCV.Op.add)
+    (op := RISCV64.Op.add)
     (eff_le := by constructor)
     (ty_eq := rfl)
     (args := ls)
     (regArgs := .nil), by rfl ⟩
   | e  => ⟨ e , by rfl ⟩
 
-def instruction (e : Expr RV64 Γ .pure .bv) :  Expr RV64 Γ .pure .bv :=
-  match e with
+
+
+  /- match e with
   | Expr.mk
     (add)
     (_)
     (_)
     (ls)
+    (_) =>  ⟨ Expr.mk
+    (op := RISCV64.Op.add)
+    (eff_le := by constructor)
+    (ty_eq := rfl)
+    (args := ls)
+    (regArgs := .nil), by rfl ⟩
+  | e  => ⟨ e , by rfl ⟩ -/
+
+def instruction (e : Expr RV64 Γ .pure .bv) :  Expr RV64 Γ .pure .bv :=
+  match e with
+  | Expr.mk
+    (.add)
+    (_)
+    (_)
+    (ls)
     (_) =>  Expr.mk
-    (op := toRISCV.Op.sub)
+    (op := Op.sub)
     (eff_le := by constructor)
     (ty_eq := rfl)
     (args := ls)
@@ -86,7 +104,7 @@ def instruction (e : Expr RV64 Γ .pure .bv) :  Expr RV64 Γ .pure .bv :=
   | e  =>  e
 
 
-theorem eq_denote {Γ : List Ty}{V :Ctxt.Valuation Γ} {e e' :Expr RV64 Γ .pure .bv} {c' c₁ :  Com RV64 (Ctxt.snoc Γ Ty.bv) EffectKind.pure .bv} (h1: e.denote = e'.denote ) (h2: c'.denote = c₁.denote): (Com.var e c').denote V = (Com.var e' c₁).denote V
+theorem eq_denote {Γ : Ctxt RV64.Ty}{V : Ctxt.Valuation Γ} {e e' :Expr RV64 Γ .pure .bv} {c' c₁ :  Com RV64 (Ctxt.snoc Γ Ty.bv) EffectKind.pure .bv} (h1: e.denote = e'.denote ) (h2: c'.denote = c₁.denote): (Com.var e c').denote V = (Com.var e' c₁).denote V
 := by
   dsimp [Com.denote]
   rw [h2]
@@ -139,7 +157,8 @@ def test_lowering2Result : Com RV64 [.bv] .pure .bv :=
     %3 = "RV64.sub" (%2, %2) : ( !i64, !i64 ) -> (!i64)
     "return" (%3) : ( !i64) -> ()
 }]
-def comSize02 := comSize test_lowering2
+#check Com
+-- def comSize02 := comSize test_lowering2
 def test_lowering22 : Com RV64 [.bv] .pure .bv := (lowering test_lowering2)
 
 theorem bigLoweringCorrect : test_lowering22 = test_lowering2Result := by
@@ -154,7 +173,7 @@ def test_lowering : Com RV64 [.bv] .pure .bv :=
     "return" (%1) : ( !i64) -> ()
 }]
 
-def comSize01 := comSize test_lowering
+
 def test : lowering  [RV64_com| {
   ^entry (%0: !i64, %2: !i64 ):
     %1 = "RV64.add" (%0, %0) : ( !i64, !i64 ) -> (!i64)

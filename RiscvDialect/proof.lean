@@ -8,7 +8,7 @@ import SSA.Projects.InstCombine.Base
 import SSA.Projects.InstCombine.ForLean
 import Lean
 
-open toRISCV -- the riscv dialect
+open RISCV64-- the riscv dialect
 open InstCombine (LLVM)
 
 set_option Elab.async false
@@ -19,7 +19,7 @@ A context refinement is a function that maps each valid RISC-V variable (a de 
 -/
 
 
-def CtxtRefines (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
+def CtxtRefines (Γ : Ctxt LLVM.Ty) (Δ : Ctxt RISCV64.Ty) : Type := -- defining how to the types are mapped between the two contexts
   (Δ.Var .bv) → Γ.Var (.bitvec 64)
 
 #print CtxtRefines
@@ -495,7 +495,7 @@ theorem valuation_eq_some_of_llvm_sub_denoe_eq_some  (h: llvm_sub.denote V = som
     -- use the lemma is llvm_sub denote is some it must be using the first nad 2nd variable and they are some
 
 
-theorem translate_sub (V₁)(V₂) (h : contextMatch V₁ V₂) :
+theorem translate_sub (V₁)(V₂) (h : contextMatchLLVMRISCV V₁ V₂ subHom) :
   ∀ x, (llvm_sub.denote V₁ = some x → riscv_sub.denote V₂ = x) := by
   intros x
   cases h1 : llvm_sub.denote V₁ with
@@ -531,7 +531,7 @@ def llvm_or :=
   }]
 
 
-theorem translate_or (V₁)(V₂) (h : contextMatch V₁ V₂) :
+theorem translate_or (V₁)(V₂) (h : contextMatchLLVMRISCV V₁ V₂ subHom) :
   ∀ x, (llvm_or.denote V₁ = some x → riscv_or.denote V₂ = x) := by sorry
 
 
@@ -549,7 +549,7 @@ def riscv_urem :=
     "return" (%v1) : (!i64, !i64) -> ()
   }]
 
-theorem translation_urem (V₁)(V₂) (h : contextMatch V₁ V₂) :
+theorem translation_urem (V₁)(V₂) (h : contextMatchLLVMRISCV V₁ V₂ subHom) :
   ∀ x, (llvm_urem.denote V₁ = some x → riscv_urem.denote V₂ = x) := by sorry
 
 

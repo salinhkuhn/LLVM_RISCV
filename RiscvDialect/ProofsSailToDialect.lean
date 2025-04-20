@@ -16,7 +16,11 @@ open Retired
 open Sail
 open PureFunctions
 
-/-
+/-!
+## Proofs Dialect Semantics
+This file contains the proof stating that the semantics of the RISC-V dialect adheres to the specified
+semantics in the SAIL-Lean RISC-V modell.
+
 this file contains the foundation of my semantics and proofs that execution a riscv instruction of
 the riscv dialect has semantics defined as in the sail riscv modell.
 

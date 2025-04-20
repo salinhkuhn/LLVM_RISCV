@@ -71,7 +71,7 @@ theorem  translation_add_combined1 (x3 x4: BitVec 64) :
 ∃ x, ADD_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3 x4)) = some x →
       x = ADD_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3 x4)) := by
     unfold ADD_RV64 lh_riscv ADD_LLVM lh_llvm
-    simp_alive_meta
+    -- simp_alive_meta
     simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.add, LLVM.add?]
     unfold RV64.RTYPE_pure64_RISCV_ADD
     simp [HVector.cons_get_zero]
@@ -90,7 +90,6 @@ theorem translation_add_combined (x3 x4: BitVec 64) :
     ADD_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3 x4)) = some x →
       x = ADD_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3 x4)) := by
     unfold ADD_RV64 lh_riscv ADD_LLVM lh_llvm
-    simp_alive_meta
     simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.add]
     unfold RV64.RTYPE_pure64_RISCV_ADD
     simp [HVector.cons_get_zero]
@@ -122,7 +121,7 @@ theorem translation_or (x3 x4: BitVec 64) :
   OR_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3 x4)) = some x →
    x = OR_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3 x4)) := by
   unfold OR_RV64 lh_riscv OR_LLVM lh_llvm
-  simp_alive_meta -- removes the framework overheard
+  -- simp_alive_meta -- removes the framework overheard
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.or, LLVM.or?]
   unfold RV64.RTYPE_pure64_RISCV_OR
   simp [HVector.cons_get_zero]
@@ -150,7 +149,7 @@ theorem translation_xor (x3 x4: BitVec 64) :
   XOR_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3 x4)) = some x →
    x = XOR_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3 x4)) := by
   unfold XOR_RV64 lh_riscv XOR_LLVM lh_llvm
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.xor, LLVM.xor?]
   unfold RV64.RTYPE_pure64_RISCV_XOR
   simp [HVector.cons_get_zero]
@@ -177,7 +176,7 @@ theorem translation_shl (x3 x4: BitVec 64) :
   shl_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3  x4)) = some x →
     x = shl_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3  x4)) := by
   unfold shl_LLVM shl_RV64
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.shl, LLVM.shl?]
   unfold RV64.RTYPE_pure64_RISCV_SLL lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
@@ -214,7 +213,7 @@ theorem translation_lshr (x3 x4: BitVec 64) :
   lshr_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3  x4)) = some x →
     x = lshr_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3  x4)) := by
   unfold lshr_LLVM lshr_RV64
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.lshr, LLVM.lshr?]
   unfold RV64.RTYPE_pure64_RISCV_SRL lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
@@ -243,7 +242,7 @@ theorem translation_ashr (x3 x4: BitVec 64) :
   ashr_LLVM_ (Ctxt.Valuation.ofHVector (lh_llvm x3  x4)) = some x →
     x = sra_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3  x4)) := by
   unfold ashr_LLVM_ sra_RV64
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.ashr, LLVM.ashr?]
   unfold RV64.RTYPE_pure64_RISCV_SRA lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
@@ -275,7 +274,7 @@ theorem translation_urem  (x3 x4: BitVec 64) :
     urem_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3  x4)) = some x →
     x = urem_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3  x4)) := by
   unfold urem_LLVM urem_RV64
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.urem, LLVM.urem?]
   unfold RV64.REM_pure64_unsigned lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
@@ -344,7 +343,7 @@ theorem translation_sub (x3 x4: BitVec 64) :
   SUB_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3 x4)) = some x →
    x = SUB_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3 x4)) := by
   unfold SUB_RV64 lh_riscv SUB_LLVM lh_llvm
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.sub, LLVM.sub?]
   unfold RV64.RTYPE_pure64_RISCV_SUB
   simp [HVector.cons_get_zero]
@@ -383,7 +382,7 @@ theorem translation_div (x3 x4: BitVec 64) :
     SDIV_LLVM (Ctxt.Valuation.ofHVector (lh_llvm x3 x4)) = some x →
    x = DIV_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3 x4)) := by
   unfold DIV_RV64 lh_riscv SDIV_LLVM lh_llvm
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.sdiv, LLVM.sdiv?]
   unfold RV64.DIV_pure64_signed
   simp [HVector.cons_get_zero]
@@ -415,7 +414,7 @@ def UDIV_RV64 :=
 def lh_llvm1 (reg: BitVec 64) : (HVector TyDenote.toType [InstCombine.Ty.bitvec 64]) :=
           HVector.cons (some (reg)) .nil
 
-def lh_riscv1 (reg: BitVec 64)  : HVector TyDenote.toType [toRISCV.Ty.bv] :=
+def lh_riscv1 (reg: BitVec 64)  : HVector TyDenote.toType [RISCV64.Ty.bv] :=
   HVector.cons (reg) .nil
 
 -- to do : generalize to any context lenght
@@ -442,7 +441,7 @@ theorem translate_neg(x3: BitVec 64) :
   neg_LLVM.denote (Ctxt.Valuation.ofHVector (lh_llvm1 x3)) = some x →
    x = neg_RV64.denote (Ctxt.Valuation.ofHVector (lh_riscv1 x3)) := by
   unfold neg_RV64 neg_LLVM lh_llvm1 lh_riscv1
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.neg, LLVM.neg? ]
   unfold RV64.RTYPE_pure64_RISCV_SUB RV64.const_func
   simp [HVector.cons_get_zero]
@@ -467,7 +466,7 @@ theorem translate_not(x3: BitVec 64) :
   not_LLVM_.denote (Ctxt.Valuation.ofHVector (lh_llvm1 x3)) = some x →
    x = not_RV64.denote (Ctxt.Valuation.ofHVector (lh_riscv1 x3)) := by
   unfold not_RV64 not_LLVM_ lh_llvm1 lh_riscv1
-  simp_alive_meta
+  -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.not, LLVM.not? ]
   unfold RV64.RTYPE_pure64_RISCV_XOR RV64.const_func
   simp [HVector.cons_get_zero]

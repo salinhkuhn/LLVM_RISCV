@@ -615,7 +615,7 @@ def RISCVE_AddSub1164_src := [RV64_com| {
 
 def RISCVE_AddSub1164_opt := [RV64_com| {
   ^entry (%a: !i64, %b: !i64 ):
-    %v1 = "RV64.sub" (%a, %b) : ( !i64, !i64 ) -> (!i64) -- b - a
+    %v1 = "RV64.add" (%a, %b) : ( !i64, !i64 ) -> (!i64)
     "return" (%v1) : (!i64, !i64) -> ()
 }].denote
 
@@ -638,7 +638,7 @@ theorem RISCV64_AddSub1164 :
 def RISCVE_AddSub1164_src2 := [RV64_com| {
   ^entry (%a: !i64, %b: !i64 ):
     %v1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %v2 = "RV64.sub" (%a, %v1 ) : ( !i64, !i64 ) -> (!i64) -- 0-a
+    %v2 = "RV64.sub" ( %v1, %a ) : ( !i64, !i64 ) -> (!i64) -- 0-a
     %v3 = "RV64.add" (%b, %v2 ) : ( !i64, !i64 ) -> (!i64) -- b - a
     "return" (%v3) : (!i64, !i64) -> ()
 }].denote
@@ -647,8 +647,8 @@ def RISCVE_AddSub1164_src2 := [RV64_com| {
 def RISCVE_AddSub1164_opt2 := [RV64_com| {
   ^entry (%a: !i64, %b: !i64 ):
     %v1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64) -- 0
-    %v2 = "RV64.sub" (%a, %v1 ) : ( !i64, !i64 ) -> (!i64) -- 0 - a basically dead code
-    %v3 = "RV64.sub" ( %a ,  %b ) : ( !i64, !i64 ) -> (!i64) -- b- a
+    %v2 = "RV64.sub" (%v1, %a ) : ( !i64, !i64 ) -> (!i64) -- 0 - a basically dead code
+    %v3 = "RV64.sub" (  %b, %a ) : ( !i64, !i64 ) -> (!i64) -- b- a
     "return" (%v3) : (!i64, !i64) -> ()
 }].denote
 
@@ -666,14 +666,14 @@ theorem RISCV64_AddSub1164_2 :
 def RV64_DivRemOfSelect_src := [RV64_com| {
   ^entry (%c: !i64, %y: !i64, %x: !i64):
     %c0 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64) -- 0
-    %v1 = "RV64.czero.nez" ( %c0, %y ) : ( !i64, !i64 ) -> (!i64) -- if c0 is zero then y else 0 --> fixed to y
-    %v2 = "RV64.divu" ( %v1, %x ) : ( !i64, !i64 ) -> (!i64) -- x / v1
+    %v1 = "RV64.czero.nez" (%y,  %c0 ) : ( !i64, !i64 ) -> (!i64) -- if c0 is zero then y else 0 --> fixed to y
+    %v2 = "RV64.divu" (%x,  %v1 ) : ( !i64, !i64 ) -> (!i64) -- x / v1
     "return" (%v2) : (!i64, !i64,!i64 ) -> ()
 }].denote
 
 def RV64_DivRemOfSelect_opt := [RV64_com| {
   ^entry (%c: !i64, %y: !i64, %x: !i64):
-    %v1 = "RV64.divu" ( %y, %x )  : ( !i64, !i64 ) -> (!i64) -- x / y
+    %v1 = "RV64.divu" ( %x, %y)  : ( !i64, !i64 ) -> (!i64) -- x / y
     "return" (%v1) : (!i64) -> ()
 }].denote
 

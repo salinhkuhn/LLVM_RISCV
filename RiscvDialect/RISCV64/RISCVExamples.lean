@@ -62,7 +62,7 @@ def RISCVEg4 := [RV64_com| {
     %2 = "RV64.sllw" (%0, %1) : (!i64, !i64) -> (!i64)
     "return" (%2) : (!i64, !i64 ) -> ()
 }]
-def lh4 : HVector TyDenote.toType [RISCV64.Ty.bv ,RISCV64.Ty.bv] :=  HVector.cons (BitVec.ofNat 64 2) <| HVector.cons (BitVec.ofNat 64 2) .nil --checking edge cases
+def lh4 : HVector TyDenote.toType [RISCV64.Ty.bv ,RISCV64.Ty.bv] :=  HVector.cons (BitVec.ofNat 64 0) <| HVector.cons (BitVec.ofNat 64 1) .nil --checking edge cases
 def test_sllw : BitVec 64 := RISCVEg4.denote  (Ctxt.Valuation.ofHVector lh4)
 #eval test_sllw
 
@@ -186,7 +186,7 @@ def RISCVEg15 := [RV64_com| {
     %2 = "RV64.sub"  (%0, %1) : (!i64, !i64) -> (!i64)
     "return" (%2) : (!i64, !i64 ) -> ()
 }]
-def lh15 : HVector TyDenote.toType [RISCV64.Ty.bv ,RISCV64.Ty.bv] :=  HVector.cons (BitVec.ofNat 64 10) <| HVector.cons (BitVec.ofNat 64 0) .nil
+def lh15 : HVector TyDenote.toType [RISCV64.Ty.bv ,RISCV64.Ty.bv] :=  HVector.cons (BitVec.ofNat 64 4) <| HVector.cons (BitVec.ofNat 64 10) .nil
 def test_sub : BitVec 64 := RISCVEg15.denote  (Ctxt.Valuation.ofHVector lh15)
 #eval test_sub --interprete it as signed or unsigned
 
@@ -224,7 +224,7 @@ def test_auipc : BitVec 64 := RISCVEg18.denote  (Ctxt.Valuation.ofHVector lh18)
 
 def RISCVEg19 := [RV64_com| {
   ^entry (%0 : !i64 ):
-    %2 = "RV64.slliw" (%0) { shamt = 19 : !i64 } : ( !i64) -> (!i64)
+    %2 = "RV64.slliw" (%0) { shamt = 1 : !i64 } : ( !i64) -> (!i64)
     "return" (%2) : ( !i64 ) -> ()
 }]
 def lh19 : HVector TyDenote.toType [RISCV64.Ty.bv] := .cons (BitVec.ofNat 64 1) .nil
@@ -283,7 +283,7 @@ def test_rem : BitVec 64 := RISCVEg24.denote  (Ctxt.Valuation.ofHVector lh24)
 -- RV64M: mul rd, rs1, rs2, signed multiplication of rs1 by rs2 and places lower bits into rd
 def RISCVEg25 := [RV64_com| {
   ^entry (%0: !i64, %1: !i64 ):
-    %2 = "RV64.mul" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    %2 = "RV64.mul" (%0, %0) : ( !i64, !i64 ) -> (!i64)
     "return" (%2) : ( !i64, !i64 ) -> ()
 }]
 def lh25 : HVector TyDenote.toType [RISCV64.Ty.bv, RISCV64.Ty.bv] := HVector.cons (BitVec.ofNat 64 7) <| HVector.cons (BitVec.ofNat 64 8) .nil
@@ -306,7 +306,7 @@ def RISCVEg27 := [RV64_com| {
     %2 = "RV64.div" (%0, %1) : ( !i64, !i64 ) -> (!i64)
     "return" (%2) : ( !i64, !i64 ) -> ()
 }]
-def lh27 : HVector TyDenote.toType [RISCV64.Ty.bv, RISCV64.Ty.bv] := HVector.cons (BitVec.ofNat 64 8) <| HVector.cons (BitVec.ofNat 64 4) .nil
+def lh27 : HVector TyDenote.toType [RISCV64.Ty.bv, RISCV64.Ty.bv] := HVector.cons (BitVec.ofNat 64 4) <| HVector.cons (BitVec.ofNat 64 8) .nil
 def test_div : BitVec 64 := RISCVEg27.denote  (Ctxt.Valuation.ofHVector lh27)
 #eval test_div
 

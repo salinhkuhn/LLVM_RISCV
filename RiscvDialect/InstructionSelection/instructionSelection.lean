@@ -1,7 +1,5 @@
 -- import RiscvDialect.RDialect
-import RiscvDialect.RISCV64.Syntax
-import RiscvDialect.RISCV64.Base
-import RiscvDialect.RISCV64.Semantics
+import RiscvDialect.RISCV64.all
 import RiscvDialect.RefinementDialect
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.LLVM.PrettyEDSL
@@ -204,87 +202,13 @@ theorem lowerSimpleIRInstruction_correct
         simp [lowerSimpleIRInstruction]
         unfold DialectSignature.sig at args1
         simp at args1
-        simp [signature] at args1
+        simp only [signature, InstCombine.MOp.sig,InstCombine.MOp.outTy] at args1
         unfold DialectSignature.effectKind at eff_le1
         simp at eff_le1
-        simp only [signature, InstCombine.MOp.sig, InstCombine.MOp.outTy, le_refl,
-          EffectKind.pure_le] at eff_le1
+        simp only [signature] at eff_le1
         -- simp_peephole at h1 when apply these the whole hyptohesis h vanishes
-        simp [signature ] at ty_eq1
-        simp_peephole at h1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        -- simp only [signature, InstCombine.MOp.sig, InstCombine.MOp.outTy] at eff_le --didnt simp any further yet
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        simp_peephole
+        simp
 
     /-
       case or => sorry
