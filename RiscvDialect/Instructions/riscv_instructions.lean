@@ -19,19 +19,19 @@ one instruction-/
 def riscv_add :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.add" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "add" (%X, %Y) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }]
 
 def riscv_sub :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.sub" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "sub" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }]
 
 def rhs_riscv_ret :=
   [RV64_com| {
   ^entry (%0 : !i64 ):
-    "return" (%0) : ( !i64 ) -> ()
+    "ret" (%0) : ( !i64 ) -> ()
 }]

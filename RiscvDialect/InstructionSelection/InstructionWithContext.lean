@@ -15,6 +15,9 @@ import Std.Tactic.BVDecide
 import SSA.Core.Tactic.TacBench
 import Leanwuzla
 
+open RISCV64
+open RISCVExpr
+open InstCombine(LLVM)
 /-- this file contains explicit proofs between a llvm and riscv lowering.
 -/
 
@@ -24,15 +27,14 @@ abbrev Com.RefinementRiscv (src tgt : Com RV64 Γ .pure t)
   ∀ Γv, (h ▸ src.denote Γv) ⊑ᵣ (h ▸ tgt.denote Γv) -- in they end they must yield the same register value
 -/
 
+
 def lh_llvm (rs1 rs2: BitVec 64) : (HVector TyDenote.toType [InstCombine.Ty.bitvec 64,InstCombine.Ty.bitvec 64]) :=
           HVector.cons (some (rs2)) <| HVector.cons (some (rs1)) .nil
 
 def lh_riscv (rs1 rs2: BitVec 64)  : HVector TyDenote.toType [RISCV64.Ty.bv,RISCV64.Ty.bv ] :=
   HVector.cons ((rs2)) <| HVector.cons ( (rs1)) .nil -- hvector from which we will create the valuation
 
-open RISCV64
-open RISCVExpr
-open InstCombine(LLVM)
+
 
 def LLVMCtxt := Ctxt InstCombine.Ty
 def RISCVCtxt := Ctxt RISCV64.Ty
@@ -48,14 +50,14 @@ def lh_riscv2 (rs1 rs2: BitVec 64)  : HVector TyDenote.toType [RISCV64.Ty.bv,RIS
 def ADD_RV64 :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.add" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = add %X, %Y : !i64
+    ret %v1 : !i64
   }].denote
 
 def ADD_LLVM :=
   [llvm(64)| {
 ^bb0(%X : i64, %Y : i64):
-      %v1 = llvm.add %Y, %X : i64
+      %v1 = llvm.add   %X,%Y : i64
       llvm.return %v1 : i64
   }].denote
 
@@ -72,12 +74,12 @@ theorem  translation_add_combined1 (x3 x4: BitVec 64) :
       x = ADD_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3 x4)) := by
     unfold ADD_RV64 lh_riscv ADD_LLVM lh_llvm
     -- simp_alive_meta
-    simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.add, LLVM.add?]
-    unfold RV64.RTYPE_pure64_RISCV_ADD
-    simp [HVector.cons_get_zero]
+    simp_peephole
+    simp [LLVM.add, LLVM.add?, RV64Semantics.RTYPE_pure64_RISCV_ADD]
     use (x4 + x3)
     intro h
     injection h with h1
+    ac_rfl
 
 def HVector.llvmToRiscv {ts : List InstCombine.Ty}
   (h : HVector TyDenote.toType (ts.map (fun _ => InstCombine.Ty.bitvec 64)))
@@ -91,7 +93,7 @@ theorem translation_add_combined (x3 x4: BitVec 64) :
       x = ADD_RV64 (Ctxt.Valuation.ofHVector (lh_riscv x3 x4)) := by
     unfold ADD_RV64 lh_riscv ADD_LLVM lh_llvm
     simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.add]
-    unfold RV64.RTYPE_pure64_RISCV_ADD
+    unfold RV64Semantics.RTYPE_pure64_RISCV_ADD
     simp [HVector.cons_get_zero]
     simp_alive_undef
     intro h
@@ -106,9 +108,9 @@ def return_val_addR : BitVec 64 := ADD_RV64 (Ctxt.Valuation.ofHVector (lh_riscv 
 def OR_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.or" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
-  }].denote
+    %v1 = "or" (%X, %Y) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
+  }]
 
 def OR_LLVM :=
   [llvm(64)| {
@@ -141,8 +143,8 @@ def XOR_LLVM :=
 def XOR_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.xor" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "xor" (%X, %Y) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }].denote
 
 theorem translation_xor (x3 x4: BitVec 64) :
@@ -151,12 +153,12 @@ theorem translation_xor (x3 x4: BitVec 64) :
   unfold XOR_RV64 lh_riscv XOR_LLVM lh_llvm
   -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.xor, LLVM.xor?]
-  unfold RV64.RTYPE_pure64_RISCV_XOR
+  unfold RV64Semantics.RTYPE_pure64_RISCV_XOR
   simp [HVector.cons_get_zero]
   intro h
   injection h with h₁
   rw [← h₁]
-  bv_decide
+
 
 def shl_LLVM :=
   [llvm(64)| {
@@ -168,8 +170,8 @@ def shl_LLVM :=
 def shl_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.sll" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "sll" ( %Y, %X) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }].denote
 
 theorem translation_shl (x3 x4: BitVec 64) :
@@ -178,7 +180,7 @@ theorem translation_shl (x3 x4: BitVec 64) :
   unfold shl_LLVM shl_RV64
   -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.shl, LLVM.shl?]
-  unfold RV64.RTYPE_pure64_RISCV_SLL lh_riscv lh_llvm
+  unfold RV64Semantics.RTYPE_pure64_RISCV_SLL lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
   simp [Ctxt.Valuation.ofHVector]
   intro h
@@ -205,8 +207,8 @@ def lshr_LLVM :=
 def lshr_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.srl" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "srl" ( %Y, %X) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }].denote
 
 theorem translation_lshr (x3 x4: BitVec 64) :
@@ -215,7 +217,7 @@ theorem translation_lshr (x3 x4: BitVec 64) :
   unfold lshr_LLVM lshr_RV64
   -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.lshr, LLVM.lshr?]
-  unfold RV64.RTYPE_pure64_RISCV_SRL lh_riscv lh_llvm
+  unfold RV64Semantics.RTYPE_pure64_RISCV_SRL lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
   simp [Ctxt.Valuation.ofHVector]
   intro h
@@ -234,8 +236,8 @@ def ashr_LLVM_ :=
 def sra_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.sra" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "sra" (%Y, %X) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }].denote
 
 theorem translation_ashr (x3 x4: BitVec 64) :
@@ -244,14 +246,19 @@ theorem translation_ashr (x3 x4: BitVec 64) :
   unfold ashr_LLVM_ sra_RV64
   -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.ashr, LLVM.ashr?]
-  unfold RV64.RTYPE_pure64_RISCV_SRA lh_riscv lh_llvm
+  unfold RV64Semantics.RTYPE_pure64_RISCV_SRA lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
   simp [Ctxt.Valuation.ofHVector]
   intro h
   split at h
   · contradiction
-  . injection h with h₁
-    rw [← h₁, Nat.mod_eq_of_lt (by bv_omega)]
+  . injection h with h
+    rw [← h, Nat.mod_eq_of_lt (by bv_omega)]
+    simp [BitVec.sshiftRight]
+    sorry
+   --bv_decide
+
+
 
 
 
@@ -265,8 +272,8 @@ def urem_LLVM :=
 def urem_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.remu" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "remu" (%X, %Y) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }].denote
 
 
@@ -276,10 +283,9 @@ theorem translation_urem  (x3 x4: BitVec 64) :
   unfold urem_LLVM urem_RV64
   -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.urem, LLVM.urem?]
-  unfold RV64.REM_pure64_unsigned lh_riscv lh_llvm
+  unfold RV64Semantics.REM_pure64_unsigned lh_riscv lh_llvm
   simp [HVector.cons_get_zero]
   simp [Ctxt.Valuation.ofHVector]
-  native_decide
   intro h
   split at h
   · contradiction
@@ -334,8 +340,8 @@ def SUB_LLVM :=
 def SUB_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.sub" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "sub" ( %Y, %X) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }].denote
 
 -- assuming no integer overflow and underflow etc. so when llvm sub returns a value then also machine code in riscv will
@@ -345,7 +351,7 @@ theorem translation_sub (x3 x4: BitVec 64) :
   unfold SUB_RV64 lh_riscv SUB_LLVM lh_llvm
   -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.sub, LLVM.sub?]
-  unfold RV64.RTYPE_pure64_RISCV_SUB
+  unfold RV64Semantics.RTYPE_pure64_RISCV_SUB
   simp [HVector.cons_get_zero]
   intro h
   injection h with h₁
@@ -374,8 +380,8 @@ def SDIV_LLVM:=
 def DIV_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.div" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "div" ( %Y, %X) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }].denote
 
 theorem translation_div (x3 x4: BitVec 64) :
@@ -384,13 +390,15 @@ theorem translation_div (x3 x4: BitVec 64) :
   unfold DIV_RV64 lh_riscv SDIV_LLVM lh_llvm
   -- simp_alive_meta
   simp_peephole [InstCombine.Op.denote,HVector.get,HVector.get, LLVM.sdiv, LLVM.sdiv?]
-  unfold RV64.DIV_pure64_signed
+  unfold RV64Semantics.DIV_pure64_signed
   simp [HVector.cons_get_zero]
   intro h
   split at h
   · contradiction
-  . simp at h
-
+  . injection h with h
+    rw [← h]
+    simp[sdiv]
+    sorry
 
 -- true and false case
 def UDIV_LLVM_:=
@@ -403,8 +411,8 @@ def UDIV_LLVM_:=
 def UDIV_RV64 :=
   [RV64_com| {
   ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.divu" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "divu" (%X, %Y) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }].denote
 
 
@@ -432,9 +440,9 @@ def neg_LLVM:=
 def neg_RV64 :=
  [RV64_com| {
   ^entry (%X: !i64): -- 0 10
-    %c ="RV64.const" () { val = 0 : !i64 } : ( !i64) -> (!i64)
-    %v1 = "RV64.sub"  (%X, %c) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64 ) -> ()
+    %c ="const" () { val = 0 : !i64 } : ( !i64) -> (!i64)
+    %v1 = "sub"  (%X, %c) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64 ) -> ()
 }]
 
 theorem translate_neg(x3: BitVec 64) :
@@ -458,9 +466,9 @@ def not_LLVM_:=
 def not_RV64 :=
  [RV64_com| {
   ^entry (%X: !i64):
-    %c ="RV64.const" () { val = -1 : !i64 } : (!i64) -> (!i64)
-    %v1 = "RV64.xor"  (%X, %c) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64 ) -> ()
+    %c ="const" () { val = -1 : !i64 } : (!i64) -> (!i64)
+    %v1 = "xor"  (%X, %c) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64 ) -> ()
 }]
 theorem translate_not(x3: BitVec 64) :
   not_LLVM_.denote (Ctxt.Valuation.ofHVector (lh_llvm1 x3)) = some x →

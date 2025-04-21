@@ -5,9 +5,9 @@ import LeanRV64DLEAN.Specialization
 import LeanRV64DLEAN.RiscvExtras
 import LeanRV64DLEAN
 import LeanRV64DLEAN.pure_func
-import RiscvDialect.Dialect
+--import RiscvDialect.Dialect
 -- import RiscvDialect.TacticSail
-
+import RiscvDialect.RISCV64.all
 open Functions
 open Retired
 open Sail
@@ -116,8 +116,8 @@ theorem execute_SHIFTIWOP_pure64_RISCV_SLLIW (shamt : BitVec 5) (rs1_val : BitVe
 
 -- logical rightshift, filled with zeros x/2^s rounding down
 theorem execute_SHIFTIWOP_pure64_RISCV_SRLIW (shamt : BitVec 5) (rs1_val : BitVec 64)  :  PureFunctions.execute_SHIFTIWOP_pure64 shamt (sopw.RISCV_SRLIW) rs1_val
-    = RV64.SHIFTIWOP_pure64_RISCV_SRLIW shamt rs1_val:= by
-  unfold RV64.SHIFTIWOP_pure64_RISCV_SRLIW PureFunctions.execute_SHIFTIWOP_pure64
+    = RV64Semantics.SHIFTIWOP_pure64_RISCV_SRLIW shamt rs1_val:= by
+  unfold RV64Semantics.SHIFTIWOP_pure64_RISCV_SRLIW PureFunctions.execute_SHIFTIWOP_pure64
   simp only [BitVec.ushiftRight_eq]
   unfold sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb  BitVec.signExtend
   rw [BitVec.extractLsb]--- to rewrite into Lsb'
@@ -420,7 +420,7 @@ theorem execute_DIVW_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64)
     =
     RV64.DIVW_pure64_unsigned rs2_val rs1_val
   := by
-  unfold RV64.DIVW_pure64_unsigned execute_DIVW_pure64
+  unfold RV64Semantics.DIVW_pure64_unsigned execute_DIVW_pure64
   unfold sign_extend Sail.BitVec.signExtend to_bits get_slice_int Sail.BitVec.extractLsb
   simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, Nat.reduceAdd,
     decide_false, Bool.false_eq_true, ↓reduceIte, Nat.sub_zero, BitVec.extractLsb_toNat,
@@ -429,9 +429,9 @@ theorem execute_DIVW_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64)
 
 theorem execute_DIV_pure64_signed (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
      execute_DIV_pure64 (True) rs2_val rs1_val
-      = RV64.DIV_pure64_signed rs2_val rs1_val
+      = RV64Semantics.DIV_pure64_signed rs2_val rs1_val
   := by
-  unfold RV64.DIV_pure64_signed execute_DIV_pure64 to_bits get_slice_int Functions.xlen xlen_max_signed xlen_min_signed Functions.xlen
+  unfold RV64Semantics.DIV_pure64_signed execute_DIV_pure64 to_bits get_slice_int Functions.xlen xlen_max_signed xlen_min_signed Functions.xlen
   simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, Nat.reduceAdd,
     decide_true, ↓reduceIte, beq_iff_eq, Int.reduceNeg, Int.reduceSub, gt_iff_lt, Bool.true_and,
     decide_eq_true_eq, zero_sub, Int.ofNat_toNat]
@@ -439,7 +439,7 @@ theorem execute_DIV_pure64_signed (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
 
 theorem execute_DIV_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64)
     : execute_DIV_pure64 (False) rs2_val rs1_val
-    = RV64.DIV_pure64_unsigned rs2_val rs1_val
+    = RV64Semantics.DIV_pure64_unsigned rs2_val rs1_val
   := by
   unfold  RV64.DIV_pure64_unsigned execute_DIV_pure64
   simp only [decide_false, Bool.false_eq_true, ↓reduceIte, beq_iff_eq, Int.natCast_eq_zero,

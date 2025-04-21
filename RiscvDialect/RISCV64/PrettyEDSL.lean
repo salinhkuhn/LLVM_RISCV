@@ -183,9 +183,9 @@ private def test_slli := [RV64_com| {
 
 private def big_test := [RV64_com| {
   ^bb0(%r1 : !i64, %r2 : !i64 ):
-  %1 =  andi %r1, 42 : !i64
-  %2 =  sub %r1,  %1 : !i64
-  %3 =  andi %2, 10 : !i64
+  %1 = andi %r1, 42 : !i64
+  %2 = sub %r1,  %1 : !i64
+  %3 = andi %2, 10 : !i64
   %4 =  div %r2, %r1 : !i64
   %5 =  add %4, %1 : !i64
   %7 =  const (2) : !i64

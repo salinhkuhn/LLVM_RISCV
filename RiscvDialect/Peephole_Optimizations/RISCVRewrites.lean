@@ -211,6 +211,8 @@ def rewrite_add0 : PeepholeRewrite RV64 [.bv] .bv :=
 def runRewriteExplicitOnce : Com RV64 [.bv] .pure .bv := rewritePeepholeAt rewrite_add0 1 lhs_add0
 def runRewriteExplicitNone : Com RV64 [.bv] .pure .bv := rewritePeepholeAt rewrite_add0 0 lhs_add0 -- any index not equal to one should work
 
+#eval runRewriteExplicitOnce
+
 def expectedOptimization0 : runRewriteExplicitNone = lhs_add0 := by native_decide
 
 def expectedOptimization01 : runRewriteExplicitOnce ≠ lhs_add0 := by native_decide

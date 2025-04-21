@@ -30,3 +30,4 @@ def llvm_ret:=
     ^bb0(%X : i64):
     llvm.return %X : i64
   }]
+

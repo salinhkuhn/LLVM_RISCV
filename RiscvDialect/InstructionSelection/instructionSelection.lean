@@ -77,7 +77,7 @@ def Com.ofExpr : Expr d Γ eff t → Com d Γ eff t := fun e =>
 
 -- how to proof this :: for all instructions th
 
-def lowerSimpleIRInstruction  (e : Expr LLVM Γ .pure (.bitvec 64)) :  Expr RV64 (LLVMCtxtToRV Γ) .pure (.bv)  :=
+def lowerSimpleIRInstruction  (e : Expr LLVM Γ .pure (.bitvec 64)) :  Expr  RV64(LLVMCtxtToRV Γ) .pure (.bv)  :=
 match e with
   -- CONST (which is a operation in llvm.mlir dialect but not in llvm ir), check
   | Expr.mk (InstCombine.Op.const 64 val) _ _ (.nil) _  =>
@@ -175,7 +175,7 @@ lowerSimpleIRInstruction_correct
 extend the statement to: ∀ e,  (isOneToOne e) → ∀ x, (e.denote V) = some x → (lowerSimpleIRInstruction e).denote (LLVMValuationToRV V) = x
 
  -/
-
+-- or might proof statement where assume denotation is monton regarding valutation -> harder
 theorem lowerSimpleIRInstruction_correct
     (e : Expr LLVM Γ .pure (.bitvec 64)) (V : Γ.Valuation) :
     ∀ x, (e.denote V) = some x → (lowerSimpleIRInstruction e).denote (LLVMValuationToRV V) = x := by
@@ -358,11 +358,11 @@ def llvm_const :=
       llvm.return %v1 : i64
   }]
 
-def riscv_const :=
+def riscv_const := -- pretty printed version
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.const" () {val = 0 : !i64} : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = const (0) : !i64
+    ret %v1 : !i64
   }]
 
 
@@ -376,8 +376,8 @@ def llvm_ashr :=
 def riscv_sra :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.sra" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = sra %Y, %X  : !i64
+          ret %v1 : !i64
   }]
 
 
@@ -392,8 +392,8 @@ def llvm_lshr :=
 def riscv_slr :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.srl" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = srl %Y, %X : !i64
+          ret %v1 : !i64
   }]
 
 def llvm_shl :=
@@ -406,8 +406,8 @@ def llvm_shl :=
 def riscv_sll :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.sll" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = sll %Y, %X : !i64
+    ret  %v1 : !i64
   }]
 
 
@@ -421,8 +421,8 @@ def llvm_urem :=
 def riscv_urem :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.remu" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = remu %Y, %X  : !i64
+    ret %v1 : !i64
   }]
 
 
@@ -436,8 +436,8 @@ def llvm_srem :=
 def riscv_srem :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.rem" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = rem %Y, %X : !i64
+    ret %v1 : !i64
   }]
 
 def llvm_udiv :=
@@ -450,8 +450,8 @@ def llvm_udiv :=
 def riscv_udiv :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.divu" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = divu %Y, %X : !i64
+    ret  %v1 : !i64
   }]
 
 def llvm_sdiv :=
@@ -464,8 +464,8 @@ def llvm_sdiv :=
 def riscv_sdiv :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.div" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "div" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }]
 
 def llvm_sub1 :=
@@ -478,15 +478,15 @@ def llvm_sub1 :=
 def riscv_sub1 :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.sub" (%Y, %X ) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "sub" (%Y, %X ) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }]
 
 def riscv_add_add :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.add" (%X, %Y) : (!i64, !i64) -> (!i64)
-    "return" (%v1) : (!i64, !i64) -> ()
+    %v1 = "add" (%X, %Y) : (!i64, !i64) -> (!i64)
+    "ret" (%v1) : (!i64, !i64) -> ()
   }]
 
 def llvm_add_add :=
@@ -499,9 +499,9 @@ def llvm_add_add :=
 def riscv_add_sub :=
   [RV64_com| {
     ^entry (%X: !i64, %Y: !i64):
-    %v1 = "RV64.add" (%X, %Y) : (!i64, !i64) -> (!i64)
-    %v2 = "RV64.sub" (%v1, %v1) : (!i64, !i64) -> (!i64)
-    "return" (%v2) : (!i64, !i64) -> ()
+    %v1 = "add" (%X, %Y) : (!i64, !i64) -> (!i64)
+    %v2 = "sub" (%v1, %v1) : (!i64, !i64) -> (!i64)
+    "ret" (%v2) : (!i64, !i64) -> ()
   }]
 
 def llvm_add_sub :=
@@ -530,9 +530,9 @@ def llvm_neg :=
 def riscv_neg :=
   [RV64_com| {
     ^entry (%X: !i64):
-    %v1 = "RV64.const" () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
-    %v2 = "RV64.sub" (%v1, %X) : (!i64, !i64) -> (!i64)
-    "return" (%v2) : (!i64, !i64) -> ()
+    %v1 = "const" () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+    %v2 = "sub" (%v1, %X) : (!i64, !i64) -> (!i64)
+    "ret" (%v2) : (!i64, !i64) -> ()
   }]
 
 def llvm_not :=
@@ -545,17 +545,17 @@ def llvm_not :=
 def riscv_not :=
   [RV64_com| {
     ^entry (%X: !i64):
-    %v1 = "RV64.const" () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
-    %v2 = "RV64.xor" ( %v1, %X) : (!i64, !i64) -> (!i64)
-    "return" (%v2) : (!i64, !i64) -> ()
+    %v1 = "const" () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
+    %v2 = "xor" ( %v1, %X) : (!i64, !i64) -> (!i64)
+    "ret" (%v2) : (!i64, !i64) -> ()
   }]
 
 def riscv_const_add :=
   [RV64_com| {
     ^entry (%X: !i64):
-    %v1 = "RV64.const" () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
-    %v2 = "RV64.add" (%X, %v1) : (!i64, !i64) -> (!i64)
-    "return" (%v2) : (!i64, !i64) -> ()
+    %v1 = "const" () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+    %v2 = "add" (%X, %v1) : (!i64, !i64) -> (!i64)
+    "ret" (%v2) : (!i64, !i64) -> ()
   }]
 
   def llvm_const_add_neg_add :=
@@ -571,12 +571,12 @@ def riscv_const_add :=
   def riscv_const_add_neg_add :=
       [RV64_com| {
       ^bb0(%X : !i64):
-      %v1 = "RV64.const " () { val = 123848392 : !i64 } : (!i64, !i64) -> (!i64)
-      %v2 = "RV64.add" (%X, %v1) : (!i64, !i64) -> (!i64)
-      %v3 = "RV64.const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
-      %v4 = "RV64.sub" (%v3, %X) : (!i64, !i64) -> (!i64)
-      %v = "RV64.add" (%v2, %v1) : (!i64, !i64) -> (!i64)
-      "return" (%v) : (!i64, !i64) -> ()
+      %v1 = "const " () { val = 123848392 : !i64 } : (!i64, !i64) -> (!i64)
+      %v2 = "add" (%X, %v1) : (!i64, !i64) -> (!i64)
+      %v3 = ".const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+      %v4 = "sub" (%v3, %X) : (!i64, !i64) -> (!i64)
+      %v = "add" (%v2, %v1) : (!i64, !i64) -> (!i64)
+      "ret" (%v) : (!i64, !i64) -> ()
   }]
 
   def llvm_only_many :=
@@ -591,13 +591,13 @@ def riscv_const_add :=
   def riscv_only_many :=
       [RV64_com| {
       ^bb0(%reg1 : !i64, %reg2 : !i64):
-      %v1 = "RV64.const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
-      %v2 = "RV64.sub" (%v1, %reg1) : (!i64, !i64) -> (!i64)
-      %v3 = "RV64.const " () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
-      %v4 = "RV64.xor"  (%v3, %reg2) : (!i64, !i64) -> (!i64)
-      %v5 = "RV64.const " () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
-      %v6 = "RV64.xor" (%v5, %reg1) : (!i64, !i64) -> (!i64)
-      "return" (%v4) : (!i64, !i64) -> ()
+      %v1 = const (0) : !i64
+      %v2 = sub %v1, %reg1 : !i64
+      %v3 = "const " () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
+      %v4 = xor  %v3, %reg2 : !i64
+      %v5 = "const " () { val = -1 : !i64 } : (!i64, !i64) -> (!i64)
+      %v6 = xor %v5, %reg1  : !i64
+      ret %v4: !i64
   }]
 
 
@@ -648,8 +648,8 @@ def loweringLLVMDoubleAddAsExpected2 : loweringLLVMtoRISCVextended llvm_add_add 
 def loweringLLVMAddSubAsExpected2 : loweringLLVMtoRISCVextended llvm_add_sub = some (riscv_add_sub) := by native_decide
 def loweringConstAdd2 : loweringLLVMtoRISCVextended llvm_const_add = some (riscv_const_add) := by native_decide
 
-def rhs : Com RV64 [.bv] .pure .bv := Com.var (const 0) (
-  Com.var (add ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) -- x + 0
+def rhs : Com RV64 [.bv] .pure .bv := Com.var (RISCVExpr.const 0) (
+  Com.var (RISCVExpr.add ⟨1, by simp[Ctxt.snoc]⟩ ⟨0, by simp[Ctxt.snoc]⟩) -- x + 0
       (Com.ret ⟨2, by simp[Ctxt.snoc]⟩))
 
 
