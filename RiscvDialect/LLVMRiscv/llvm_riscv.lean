@@ -15,7 +15,9 @@ This file modells a llvm/riscv hybrid dialect that supports `RISC-V` instruction
 
 TO DO:
   parsing of the flags (disjoint, exact and overflow), couldn't figure it out properly.
-
+  analyze how the semantics actually map between eachother.
+  implement pretty printing for the dialect
+  implemnt reverse printer
 -/
 
 namespace riscv.semantics
@@ -50,6 +52,7 @@ BitVec.setWidth 64
         (BitVec.extractLsb 5 0 rs2_val).toNat
         (BitVec.signExtend
           (64 + (BitVec.extractLsb 5 0 rs2_val).toNat) rs1_val))
+-- TO DO
 example (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec.setWidth 64
       (BitVec.extractLsb
         (63 + (BitVec.extractLsb 5 0 rs2_val).toNat)
@@ -61,10 +64,7 @@ example (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec.setWidth 64
             simp
           rw [h1]
           simp [BitVec.sshiftRight]
-
           sorry
-
-
 
 
 example (rs2_val : BitVec 64) (rs1_val : BitVec 64) :  BitVec.extractLsb' 0 64
@@ -85,8 +85,6 @@ example (rs2_val : BitVec 64) (rs1_val : BitVec 64) :  BitVec.extractLsb' 0 64
       . simp only [Int.reduceNeg, Int.neg_ofNat_le_ofNat, sup_of_le_right, BitVec.ofInt_ofNat,
         BitVec.extractLsb'_zero]
       . sorry
-
-
 
 
 #eval 9223372036854775807  < -1
@@ -110,15 +108,6 @@ def DIV_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 
     (BitVec.ofNat 65
       (if Int.ofNat rs2_val.toNat = 0 then -1 else (Int.ofNat rs1_val.toNat).tdiv (Int.ofNat rs2_val.toNat)).toNat)
 -- insert the llvm add semantics
-example (rs2_val : BitVec 64) (rs1_val : BitVec 64)  :
-    BitVec.extractLsb' 0 64
-    (BitVec.ofNat 65
-      (if Int.ofNat rs2_val.toNat = 0 then -1 else (Int.ofNat rs1_val.toNat).tdiv (Int.ofNat rs2_val.toNat)).toNat)
-      =
-          (BitVec.ofNat 64
-      (if Int.ofNat rs2_val.toNat = 0 then -1 else (Int.ofNat rs1_val.toNat).tdiv (Int.ofNat rs2_val.toNat)).toNat)
-      := by sorry
-
 
 def REM_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64  :=
    BitVec.extractLsb' 0 64
@@ -186,21 +175,21 @@ inductive Op
 --|riscv.li
 |builtin.unrealized_conversion_cast.riscvToLLVM
 |builtin.unrealized_conversion_cast.LLVMToriscv
-deriving DecidableEq, Inhabited, Lean.ToExpr
+deriving DecidableEq, Inhabited, Lean.ToExpr,Repr
 
 
 
 inductive Ty -- here belongs what my operations operate on
-  | bv64 : Ty
-  | opt64 : Ty
+  | bv : Ty -- equivalent to the type in the RISCV64 dialect.
+  | bitvec : Ty -- euqivalent to the LLVM IR dialect
   -- need to add the llvm option type
   deriving DecidableEq, Repr
 
 open TyDenote (toType) in
 instance LLVMRISCVTyDenote : TyDenote Ty where
 toType := fun
-| Ty.bv64 => BitVec 64
-| Ty.opt64 => Option (BitVec 64)
+| Ty.bv => BitVec 64
+| Ty.bitvec => Option (BitVec 64)
 
 abbrev llvm.riscv : Dialect where
   Op := Op -- define the avaiable operations
@@ -208,7 +197,7 @@ abbrev llvm.riscv : Dialect where
 
 @[simp, reducible] -- this basically will be the contexts
 def Op.sig : Op → List Ty
-|riscv.add => [Ty.bv64, Ty.bv64]
+|riscv.add => [Ty.bv, Ty.bv]
 |llvm.add _ _ => [Ty.opt64, Ty.opt64] -- defines it as an optional value and if passed overwrites the default value, else default value.
 |riscv.sub => [Ty.bv64, Ty.bv64]
 |llvm.sub _ _ => [Ty.opt64, Ty.opt64]
@@ -246,7 +235,7 @@ def Op.sig : Op → List Ty
 @[simp, reducible] -- reduceable means this expression can always be expanded by the type checker when type checking
 -- output signature , part of an op
 def Op.outTy : Op  → Ty
-|riscv.add => .bv64
+|riscv.add => .bv
 |llvm.add _ flags => .opt64
 |riscv.sub => .bv64
 |llvm.sub _ _ => .opt64
@@ -284,7 +273,6 @@ def Op.signature : Op → Signature (Ty) :=
   fun o => {sig := Op.sig o, outTy := Op.outTy o, regSig := []}
 
 instance : DialectSignature llvm.riscv := ⟨Op.signature⟩
-
 
 open LLVM
 
@@ -355,7 +343,7 @@ instance : DialectDenote (llvm.riscv) where denote
 end Dialect
 
 -- helper functions to easier create expressions and check the parsing of a program writtin in IR style into Com and Expr.
-def riscv.add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv64) : Expr llvm.riscv Γ .pure .bv64  :=
+def riscv.add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr llvm.riscv Γ .pure .bv  :=
   Expr.mk
     (op := llvm.riscv.Op.riscv.add)
     (eff_le := by constructor)
@@ -481,7 +469,8 @@ def llvm.const {Γ : Ctxt _} (n : ℤ) : Expr llvm.riscv Γ .pure .opt64  :=
 def mkTy : MLIR.AST.MLIRType φ → MLIR.AST.ExceptM llvm.riscv llvm.riscv.Ty
   | MLIR.AST.MLIRType.undefined s => do
     match s with
-    | "r64" => return .bv64 --maybe change it later
+    | "r64" => return .bv --maybe change it later
+    | "riscv.reg" => return .bv -- to make it compatible with the MLIR representation of riscv.
     | "i64" => return .opt64
     | _ => throw .unsupportedType
   | _ => throw .unsupportedType
@@ -497,22 +486,35 @@ instance instTransformTy : MLIR.AST.TransformTy llvm.riscv 0 where
 
 def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
   MLIR.AST.ReaderM (llvm.riscv) (Σ eff ty, Expr (llvm.riscv) Γ eff ty) := do
+    match mkExpr with -- use the llvm parser else use the riscv parser
+    
+
+
+-- idea have a type that is either llvm type or riscv type
+-- implement staged parsing --> llvm to riscv
+/-
+def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
+  MLIR.AST.ReaderM (llvm.riscv) (Σ eff ty, Expr (llvm.riscv) Γ eff ty) := do
     match opStx.args with
-    |[]  => do
+    | []  => do
         let some att := opStx.attrs.getAttr "val"
           | throw <| .unsupportedOp s!"no attirbute in const {repr opStx}"
-        match att with
-          | .int val ty =>
-            let opTy ← mkTy ty -- ty.mkTy
-            return ⟨.pure, opTy, ⟨
-              .riscv.li (val),
-              by
-              simp[DialectSignature.outTy, signature]
-             ,
-              by constructor,
-              .nil,
-              .nil
-            ⟩⟩
+        match att, opStx.name with
+          | .int val ty, "riscv.li" =>
+            let opTy← mkTy ty -- ty.mkTy
+            match h: opTy with
+            | .bv64 =>
+              return ⟨.pure, opTy, ⟨
+                .riscv.li (val), -- needed to add this extra mechanism in parsing
+                by
+                simp[DialectSignature.outTy, signature, h]
+              ,
+                by constructor,
+                .nil,
+                .nil
+              ⟩⟩
+            | _ =>  throw <| .unsupportedOp s!"unsupported operation: tried to input an Option BitVec to riscv.li {repr opStx}"
+          | _, _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
     | v₁Stx :: [] =>
        let ⟨ty₁, v₁⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₁Stx
        match ty₁, opStx.name with
@@ -554,55 +556,55 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
         let ⟨ty₁, v₁⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₁Stx
         let ⟨ty₂, v₂⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₂Stx
         match ty₁, ty₂, opStx.name with
-        | .bv64 , .bv64 , "add" => --refers to an assembly add
+        | .bv64 , .bv64 , "riscv.add" => --refers to an assembly add
               return ⟨ .pure, .bv64 ,⟨ .riscv.add, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "sub" =>
+        | .bv64 , .bv64 , "riscv.sub" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.sub, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "and" =>
+        | .bv64 , .bv64 , "riscv.and" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.and, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "xor" =>
+        | .bv64 , .bv64 , "riscv.xor" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.xor, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "sll" =>
+        | .bv64 , .bv64 , "riscv.sll" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.sll, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "or" =>
+        | .bv64 , .bv64 , "riscv.or" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.or, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "srl" =>
+        | .bv64 , .bv64 , "riscv.srl" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.srl, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "sra" =>
+        | .bv64 , .bv64 , "riscv.sra" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.sra, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "div" =>
+        | .bv64 , .bv64 , "riscv.div" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.div, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "divu" =>
+        | .bv64 , .bv64 , "riscv.divu" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.divu, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "remu" =>
+        | .bv64 , .bv64 , "riscv.remu" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.remu, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "rem" =>
+        | .bv64 , .bv64 , "riscv.rem" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.remu, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "mul" =>
+        | .bv64 , .bv64 , "riscv.mul" =>
               return ⟨ .pure, .bv64 ,⟨ .riscv.mul, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
@@ -676,6 +678,7 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
                 .nil⟩⟩
         | _ ,_, _ => throw <| .unsupportedOp s!"wrong number of arguemnts, more than 2 arguemnts  {repr opStx}"
     | _  => throw <| .unsupportedOp "didnt implement instruction yet "
+-/
 
 instance : MLIR.AST.TransformExpr (llvm.riscv) 0 where
   mkExpr := mkExpr
@@ -722,7 +725,7 @@ def exampleLLVMOr  :=
 def exampleRiscv : Com llvm.riscv [.bv64] .pure .bv64 :=
 [_| {
   ^entry (%0: !r64 ):
-  %1 = "add" (%0, %0) : (!r64, !r64 ) -> (!r64)
+  %1 = "riscv.add" (%0, %0) : (!r64, !r64 ) -> (!r64)
   "return" (%1) : ( !r64) -> ()
 }]
 
@@ -775,8 +778,6 @@ def lowerSimpleIRInstructionDialect (e : Expr llvm.riscv Γ .pure .opt64) :  Exp
     (regArgs := .nil)
 
     -- still wrong type
-
-
 def loweringLLVMtoRISCV : {Γ : Ctxt llvm.riscv.Ty} → (com : Com llvm.riscv Γ .pure (.opt64)) → Option (Com llvm.riscv (LLVMCtxtToRV Γ)  .pure (.bv64))
   | _, Com.ret x  =>  some (Com.ret (LLVMVarToRV x))
   | _, Com.var (α := llvm.riscv.Ty.opt64) e c' =>
@@ -786,44 +787,12 @@ def loweringLLVMtoRISCV : {Γ : Ctxt llvm.riscv.Ty} → (com : Com llvm.riscv Γ
         | none => none
   | _, Com.var (α := llvm.riscv.Ty.bv64) e1 e2 => none --, shoulnt call the lowering on itself some (Com.var (α := llvm.riscv.Ty.bv64) e1 e2) ---
 
-def exampleLLVM1 : Com llvm.riscv (Ctxt.ofList [.opt64]) .pure .opt64 :=
-[_|{
-  ^entry (%0: !i64 ):
-  %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
-  "return" (%1) : ( !i64) -> ()
-}]
-
-def exampleRiscv1 : Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .bv64 :=
-[_| {
-  ^entry (%0: !r64 ):
-  %1 = "add" (%0, %0) : (!r64, !r64 ) -> (!r64)
-  "return" (%1) : ( !r64) -> ()
-}]
-def exampleRiscv1PRETTY  : Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .bv64 :=
-[_| {
-  ^entry (%0: !r64 ):
-  %1 = "add" (%0, %0) : (!r64, !r64 ) -> (!r64)
-  "return" (%1) : ( !r64) -> ()
-}]
- -- DOESNT WORK YET BECAUSE THE REWRITER DOESNT WORK FOR REFINEMENT YET
--- problem of the peephole rewriter that he doesnt support refinements
-
---this wont typecheck because of the diffrent types within a dialect.
-def loweringViaRewriterWorks :  PeepholeRewrite llvm.riscv ([Ty.opt64]) .opt64 :=
- {lhs := [_| {
-  ^entry (%0: !i64 ):
-  %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
-  "return" (%1) : ( !i64) -> ()
-}], rhs := [_| {
-  ^entry (%0: !i64 ):
-  %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
-  "return" (%1) : ( !i64) -> ()
-}] , correct := by rfl
- }
 
 /--
-encoded our notion of refinement within unrealized_conversion_casts
+## Example Section
+TO DO: implement pretty printing for it
 -/
+-- unrealized_conversion_cast examples
 def unrealized_conversion_cast_testRiscvToLLVM :  Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .opt64 :=
   [_| {
     ^entry (%0: !r64 ):
@@ -838,88 +807,27 @@ def unrealized_conversion_cast.LLVMToriscv :  Com llvm.riscv (Ctxt.ofList [.opt6
     "return" (%1) : (!r64) -> ()
   }]
 
+def exampleLLVM1 : Com llvm.riscv (Ctxt.ofList [.opt64]) .pure .opt64 :=
+[_|{
+  ^entry (%0: !i64 ):
+  %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
+  "return" (%1) : ( !i64) -> ()
+}]
 
+def exampleRiscv1 : Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .bv64 :=
+[_| {
+  ^entry (%0: !r64 ):
+  %1 = "riscv.add" (%0, %0) : (!r64, !r64 ) -> (!r64)
+  "return" (%1) : ( !r64) -> ()
+}]
+def exampleRiscv1PRETTY  : Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .bv64 :=
+[_| {
+  ^entry (%0: !r64 ):
+  %1 = "riscv.add" (%0, %0) : (!r64, !r64 ) -> (!r64)
+  "return" (%1) : ( !r64) -> ()
+}]
 
-def cast_cast_eq_cast_out_llvm : PeepholeRewrite llvm.riscv ([Ty.opt64]) .opt64 :=
-  {lhs:=
-    [_| {
-    ^entry (%0: !i64 ):
-    "return" (%0) : (!i64) -> ()
-  }], rhs:=
-    [_| {
-    ^entry (%0: !i64 ):
-    %1 = "builtin.unrealized_conversion_cast.LLVMToriscv" (%0) : (!i64) -> (!r64)
-    %2 = "builtin.unrealized_conversion_cast.riscvToLLVM" (%1) : (!r64) -> (!i64)
-    "return" (%2) : (!i64) -> ()
-  }] ,
-   correct:=
-    by
-    simp_peephole
-    intro e'
-    simp [riscv.semantics.builtin.unrealized_conversion_cast.LLVMToriscv, riscv.semantics.builtin.unrealized_conversion_cast.riscvToLLVM]
-    cases e'
-    . simp only [Option.getD_none]
-      sorry
-    . rw [Option.getD_some]
-    }
-
-def cast_cast_eq_cast_out_riscv : PeepholeRewrite llvm.riscv ([Ty.bv64]) .bv64 :=
-  {lhs:=
-    [_| {
-    ^entry (%0: !r64 ):
-    "return" (%0) : (!r64) -> ()
-  }], rhs:=
-    [_| {
-    ^entry (%0: !r64 ):
-    %1 = "builtin.unrealized_conversion_cast.riscvToLLVM" (%0) : (!r64) -> (!i64)
-    %2 = "builtin.unrealized_conversion_cast.LLVMToriscv" (%1) : (!i64) -> (!r64)
-    "return" (%2) : (!r64) -> ()
-  }] ,
-   correct:=
-    by
-    simp_peephole
-    intro e'
-    simp [riscv.semantics.builtin.unrealized_conversion_cast.LLVMToriscv, riscv.semantics.builtin.unrealized_conversion_cast.riscvToLLVM]
-    }
-
--- variable (d : Dialect) [DialectSignature d] [TyDenote d.Ty] [DialectDenote d] [Monad d.m] in
-structure RiscVPeepholeRewriteRefine (Γ : Ctxt Ty) where
-  lhs : Com llvm.riscv Γ .pure Ty.opt64
-  rhs : Com llvm.riscv Γ .pure Ty.opt64
-  correct : ∀ V, BitVec.Refinement (lhs.denote V : Option _) (rhs.denote V : Option _)
-
-def RiscVPeepholeRewriteRefine.toPeepholeUNSOUND (self : RiscVPeepholeRewriteRefine Γ) : PeepholeRewrite llvm.riscv Γ .opt64 :=
-  {
-    lhs := self.lhs
-    rhs := self.rhs
-    correct := by sorry
-  }
-
-def lowerAdd : RiscVPeepholeRewriteRefine [Ty.opt64, Ty.opt64] :=
-  {lhs:=
-    [_| {
-    ^entry (%lhs: !i64, %rhs: !i64 ):
-      %add = "llvm.add"(%lhs, %rhs) : (!i64, !i64) -> !i64
-      "return" (%add) : (!i64) -> ()
-  }], rhs:=
-    [_| {
-    ^entry (%lhs: !i64, %rhs: !i64 ):
-      %lhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%lhs) : (!i64) -> !r64
-      %rhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%rhs) : (!i64) -> !r64
-      %add = "add"(%lhsr, %rhsr) : (!r64, !r64) -> !r64
-      %addl = "builtin.unrealized_conversion_cast.riscvToLLVM" (%add) : (!r64) -> (!i64)
-      "return" (%addl) : (!i64) -> ()
-  }] ,
-   correct := by
-    simp_peephole
-    simp [riscv.semantics.builtin.unrealized_conversion_cast.riscvToLLVM,
-      riscv.semantics.builtin.unrealized_conversion_cast.LLVMToriscv,
-      riscv.semantics.RTYPE_pure64_RISCV_ADD,
-      add, liftM, monadLift, MonadLift.monadLift,
-      BitVec.Refinement.some_some
-      ]
-    rintro (_|_) (_|_) <;> simp [add?]
-  }
+#eval exampleRiscv1PRETTY
 /-
   %addi32 = arith.addi %lhsi32, %rhsi32 : i32
 }
@@ -932,28 +840,10 @@ builtin.module {
   %addi32_3 = builtin.unrealized_conversion_cast %addi32_2 : !riscv.reg to i32
 -/
 
-
 /--
   |.builtin.unrealized_conversion_cast.riscvToLLVM, elemToCast, _  => riscv.semantics.builtin.unrealized_conversion_cast.riscvToLLVM  (elemToCast.getN 0 (by simp [DialectSignature.sig, signature]))
   |.builtin.unrealized_conversion_cast.LLVMToriscv, elemToCast, _ =>
 -/
-
-
-
-def loweringViaRewriterDoesntWork :  PeepholeRewrite llvm.riscv ([Ty.opt64]) .bv64 :=
- {lhs := [_| {
-  ^entry (%0: !i64 ):
-  %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
-  "return" (%1) : ( !i64) -> ()
-}], rhs := [_| {
-  ^entry (%0: !r64 ):
-  %1 = "add" (%0, %0) : (!r64, !r64 ) -> (!r64)
-  "return" (%1) : ( !r64) -> ()
-}], correct := by sorry }
-
-
-
-
 
 -- test if the intra dialect lowering works
 def testAddLowering : loweringLLVMtoRISCV exampleLLVM1 = some (exampleRiscv1) := by native_decide
@@ -964,7 +854,5 @@ def testAddLowering : loweringLLVMtoRISCV exampleLLVM1 = some (exampleRiscv1) :=
   %1 = "add" (%0, %0) : (!r64, !r64 ) -> (!r64)
   "return" (%1) : ( !r64) -> ()
 }], correct := by sorry }
-
--/
 
 -/

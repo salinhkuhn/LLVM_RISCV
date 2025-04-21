@@ -120,7 +120,7 @@ end RISCVExpr
   |.sra, regs, _  => RV64.RTYPE_pure64_RISCV_SRA (regs.getN 0 (by simp [DialectSignature.sig, signature]))  (regs.getN 1 (by simp [DialectSignature.sig, signature]))
   |.srai shamt, regs, _  => RV64.SHIFTIOP_pure64_RISCV_SRAI shamt  (regs.getN 0 (by simp [DialectSignature.sig, signature]))
 -/
-
+namespace RiscvMkExpr
 -- string representation of MLIR type into corresponding RISCV type
 def mkTy : MLIR.AST.MLIRType φ → MLIR.AST.ExceptM RV64 RV64.Ty
   | MLIR.AST.MLIRType.undefined s => do
@@ -697,3 +697,4 @@ instance : MLIR.AST.TransformReturn (RV64) 0 where
 open Qq MLIR AST Lean Elab Term Meta in
 elab "[RV64_com| " reg:mlir_region "]" : term => do
   SSA.elabIntoCom reg q(RV64)
+end RiscvMkExpr

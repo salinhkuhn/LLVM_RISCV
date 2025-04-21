@@ -59,15 +59,15 @@ theorem get_cons_1 {A : α → Type*} {a b: α} {as : List α}
 def lhs_and0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
   [RV64_com| {
   ^entry (%0: !i64 ):
-    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
-    "return" (%2) : ( !i64) -> ()
+    %1 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    "ret" (%2) : ( !i64) -> ()
 }]
 def rhs_and0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
   [RV64_com| {
   ^entry (%0 : !i64 ):
-    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    "return" (%1) : ( !i64 ) -> ()
+    %1 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    "ret" (%1) : ( !i64 ) -> ()
 }]
 -- this theorem proofs that for every context if lhs and rhs are invoked with the same context the can be rewritten into eachother
 theorem peephole01 : (rhs_and0  ⊑ᵣ lhs_and0) := by
@@ -83,14 +83,14 @@ theorem peephole01 : (rhs_and0  ⊑ᵣ lhs_and0) := by
 def rewrite_and0 : PeepholeRewrite RV64 [.bv] .bv :=
   { lhs:= [RV64_com| {
   ^entry (%0: !i64 ):
-    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %2 = "RV64.and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
-    "return" (%2) : ( !i64) -> ()
+    %1 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "and" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    "ret" (%2) : ( !i64) -> ()
 }] ,
     rhs:= [RV64_com| {
   ^entry (%0 : !i64 ):
-    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    "return" (%1) : ( !i64 ) -> ()
+    %1 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    "ret" (%1) : ( !i64 ) -> ()
 }],
     correct :=
     by
@@ -104,10 +104,13 @@ def rewrite_and0 : PeepholeRewrite RV64 [.bv] .bv :=
 def ex1_rewritePeepholeAtO0 :
     Com RV64 (Ctxt.ofList [.bv]) .pure .bv := rewritePeepholeAt rewrite_and0 0 lhs_and0
 
+#eval ex1_rewritePeepholeAtO0
 -- optimized code
 def ex1_rewritePeepholeAtO1 :
     Com RV64 (Ctxt.ofList [.bv]) .pure .bv := rewritePeepholeAt rewrite_and0 1 lhs_and0
 
+
+#eval ex1_rewritePeepholeAtO1
 
 -- defined function to return eexpressio in RDialect
 theorem ex1_rewritePeepholeAtExpectedOutcome :
@@ -164,15 +167,15 @@ theorem expectedRecursionResult : ex12_rewritePeepholeRecrusivly = Com.var (cons
 def lhs_add0 : Com RV64 [.bv] .pure .bv :=
   [RV64_com| {
   ^entry (%0: !i64 ):
-    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %2 = "RV64.add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
-    "return" (%2) : ( !i64) -> ()
+    %1 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    "ret" (%2) : ( !i64) -> ()
 }]
 
 def rhs_add0 : Com RV64 [.bv] .pure .bv :=
   [RV64_com| {
   ^entry (%0 : !i64 ):
-    "return" (%0) : ( !i64 ) -> ()
+    "ret" (%0) : ( !i64 ) -> ()
 }]
 -- proof that the rewrite holds, meaning that the rhs is a refinement of the lhs
 theorem add0_peepholeRewrite : rhs_add0 ⊑ᵣ lhs_add0 := by
@@ -186,13 +189,13 @@ theorem add0_peepholeRewrite : rhs_add0 ⊑ᵣ lhs_add0 := by
 def rewrite_add0 : PeepholeRewrite RV64 [.bv] .bv :=
   { lhs:= [RV64_com| {
   ^entry (%0: !i64 ):
-    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %2 = "RV64.add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
-    "return" (%2) : ( !i64) -> ()
+    %1 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    "ret" (%2) : ( !i64) -> ()
 }],
     rhs:= [RV64_com| {
   ^entry (%0 : !i64 ):
-    "return" (%0) : ( !i64 ) -> ()
+    "ret" (%0) : ( !i64 ) -> ()
 }],
     correct :=
     by
@@ -236,8 +239,12 @@ Com.var (const 0) (
 def applyDCE1 : Com RV64 [.bv] .pure .bv :=
   (DCE.dce' runRewriteExplicitOnce)
 
+#eval applyDCE1
+
 def applyDCE2 : Com RV64 [.bv] .pure .bv :=
   (DCE.dce' runRewriteExplicitNone)
+
+#eval applyDCE2
 
 -- applies dead code elimination once and now can apply a second time until reach a fixed point ?
 -- this eliminated the first add
@@ -268,7 +275,10 @@ def  exhaustivlyDCE (comBefore :  Com RV64 [.bv] .pure .bv ) : Com RV64 [.bv] .p
   recRunner (comBefore ) ((DCE.dce' comBefore).val)  (comSize comBefore) -- run DCE size of Com step bc at max we eliminate all lines
 
 
+
 def appliedDCE : Com RV64 [.bv] .pure .bv := exhaustivlyDCE runRewriteExplicitOnce
+
+#eval appliedDCE
 
 theorem dce_runner_applied_exhaustivly : appliedDCE =  Com.ret (⟨0, by simp [Ctxt.snoc] ⟩ )
 := by native_decide -- worked aka dead code elimination was applied recurisvly
@@ -292,11 +302,11 @@ theorem DCEonUnoptimizedCode : applyDCE2 = Com.var (const 0) (
 def egLhs : Com RV64 [.bv] .pure .bv :=
   [RV64_com| {
   ^entry (%0: !i64 ):
-    %1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %2 = "RV64.add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
-    %4 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %5 = "RV64.and" (%0, %4) : ( !i64, !i64 ) -> (!i64)
-    "return" (%5) : ( !i64) -> ()
+    %1 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %2 = "add" (%0, %1) : ( !i64, !i64 ) -> (!i64)
+    %4 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %5 = "and" (%0, %4) : ( !i64, !i64 ) -> (!i64)
+    "ret" (%5) : ( !i64) -> ()
 }]
 
 
@@ -305,9 +315,9 @@ def egLhs2 : Com RV64 [.bv] .pure .bv :=
   ^entry (%0: !i64 ):
     --%1 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
    -- %2 = "RV64.add" (%0, %0) : ( !i64, !i64 ) -> (!i64)
-    %4 = "RV64.const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
-    %5 = "RV64.and" (%0, %4) : ( !i64, !i64 ) -> (!i64)
-    "return" (%5) : ( !i64) -> ()
+    %4 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)
+    %5 = "and" (%0, %4) : ( !i64, !i64 ) -> (!i64)
+    "ret" (%5) : ( !i64) -> ()
 }]
 def egLhs_rewritePeepholeRecrusivly :
   Com RV64 [.bv] .pure .bv :=
