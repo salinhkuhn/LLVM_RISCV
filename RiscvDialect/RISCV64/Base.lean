@@ -129,6 +129,8 @@ inductive Ty
   | bv : Ty
   deriving DecidableEq, Repr, Inhabited
 
+instance : ToString (Ty) where
+  toString t := repr t |>.pretty
 /-!
 Connecting the `bv` type to its underlying Lean type `BitVec 64`. By providing a `TyDenote` instance,
 we define how the `RISCV64` types transalte into actual Lean types.
@@ -410,5 +412,3 @@ instance : DialectDenote (RV64) where
   | .sh2add, regs, _  =>  ZBA_RTYPE_pure64_RISCV_SH2ADD (regs.getN 1 (by simp [DialectSignature.sig, signature]))  (regs.getN 0 (by simp [DialectSignature.sig, signature]))
   | .sh3add, regs, _  =>  ZBA_RTYPE_pure64_RISCV_SH3ADD (regs.getN 1 (by simp [DialectSignature.sig, signature]))  (regs.getN 0 (by simp [DialectSignature.sig, signature]))
 end RISCV64
-
-

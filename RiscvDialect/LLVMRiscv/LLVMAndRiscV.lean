@@ -6,75 +6,205 @@ import SSA.Projects.InstCombine.ForStd
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.Tactic
 import RiscvDialect.RISCV64.all
-
+set_option pp.fieldNotation false
+open InstCombine(LLVM)
 namespace LLVMRiscV
 /- The types of this dialect contain the types modelled in the LLVM dialect
 and in the Riscv Dialect. -/
 
-inductive Ty where
-  | llvm : InstCombine.Ty -> Ty
-  | riscv :  RISCV64.Ty -> Ty
+private inductive Ty where
+  | llvm : (Dialect.Ty LLVM) -> Ty
+  | riscv : (Dialect.Ty RISCV64.RV64) -> Ty
 
+private inductive Op where
+  | llvm : (Dialect.Op LLVM) -> Op
+  | riscv : (Dialect.Op RISCV64.RV64) -> Op
+  | builtin.unrealized_conversion_cast.riscvToLLVM : Op
+  | builtin.unrealized_conversion_cast.LLVMToriscv : Op
 
-inductive Op where
-  | llvm : InstCombine.Op -> Op
-  | riscv : RISCV64.Op -> Op
+def builtin.unrealized_conversion_cast.riscvToLLVM (toCast : BitVec 64 ): Option (BitVec 64 ) := some toCast
+/--
+Casting a some x to x. The none (poison case) will be harded coded to zero bit vector as any
+values refines a poison value.
+-/
+def builtin.unrealized_conversion_cast.LLVMToriscv (toCast : Option (BitVec 64)) : BitVec 64 := toCast.getD 0#64 -- rethink choice later
+
 
 @[simp]
 abbrev LLVMPlusRiscV : Dialect where
   Op := Op
   Ty := Ty
 
-/-
-Types of this dialect are wrappers around the original LLVM / RISCV64 dialects.
-Depending on the wrapper which signifies from which dialect the operation steems,
-we dispatch the corresponding instance originating from the "source" dialect.
--/
+namespace LLVMPlusRiscV.Op
 
-instance : TyDenote (LLVMPlusRiscV.Ty) where
+def llvm (llvmOp : LLVM.Op) : LLVMPlusRiscV.Op :=
+  --((@id (Dialect.Op LLVMPlusRiscV) <|
+    LLVMRiscV.Op.llvm llvmOp
+    --))
+
+
+end LLVMPlusRiscV.Op
+
+instance : TyDenote (Dialect.Ty LLVMPlusRiscV) where
   toType := fun
     | .llvm llvmTy => TyDenote.toType llvmTy
     | .riscv riscvTy => TyDenote.toType riscvTy
 
+@[simp]
+instance : DialectSignature LLVMPlusRiscV where
+  signature
+  | .llvm llvmOp => .llvm <$> DialectSignature.signature llvmOp
+  | .riscv riscvOp => .riscv <$> DialectSignature.signature riscvOp
+  | .builtin.unrealized_conversion_cast.riscvToLLVM => {sig := [Ty.riscv .bv], outTy := Ty.llvm (.bitvec 64), regSig := []}
+  | .builtin.unrealized_conversion_cast.LLVMToriscv => {sig := [Ty.llvm (.bitvec 64)], outTy := (Ty.riscv .bv), regSig := []}
+/-
 @[simp, reducible]
 def Op.sig : Op → List Ty
   | .llvm llvmop  => List.map Ty.llvm llvmop.sig
-  | .riscv riscvop => List.map Ty.riscv riscvop.sig
 
 @[simp, reducible]
 def Op.outTy : Op → Ty
-  | .llvm op => Ty.llvm (op.outTy)
-  | .riscv op => Ty.riscv (op.outTy)
+  | .llvm op => Ty.llvm (op.outTy) -- dont understand why op is of type instCombine and not LLVM
+
+
 
 @[simp, reducible]
 def Op.signature : Op → Signature (Ty) :=
   fun o => {sig := Op.sig o, outTy := Op.outTy o, regSig := []}
 
 instance : DialectSignature LLVMPlusRiscV := ⟨Op.signature⟩
+-/
+
+def extractllvmArgs : LLVMRiscV.Op → LLVM.Op
+  | .llvm llvmOp => llvmOp
+  | _ => .const 64 0 -- fallback case if function gets called on RISCV ops.
 
 
-#check DialectDenote.denote
+def extractriscvArgs : LLVMRiscV.Op → RISCV64.RV64.Op
+  | .riscv riscvOp => riscvOp
+  | _ => .const 0 -- fallback case if function gets called on LLVM ops.
+
+
+
+#check LLVMRiscV.Op.llvm _
+#check LLVMPlusRiscV.Op
+-- #check (LLVMPlusRiscV.Op).llvm
+#check (LLVMPlusRiscV.Op.llvm _  )
+
+#check ((@id (Dialect.Op LLVMPlusRiscV) <| LLVMRiscV.Op.llvm _))
+#check (Dialect.Op LLVMPlusRiscV)
+
+example (d : Dialect) : d.Ty := by
+  sorry
+
+
+-- HVector toType (argumentTypes (.llvm llvmOp))
+-- HVector toType ((argumentTypes llvmOp).map .llvm : List Hybrid.Ty)
+
+-- args : HVector toType (argumentTypes llvmOp : List LLVM.Ty)
+-- args[i] : toType (argumentTypes ...)[i]
+
+#check LLVMPlusRiscV.Op.llvm
+def llvmArgsFromHybrid : {tys : List LLVM.Ty} → HVector TyDenote.toType (tys.map LLVMRiscV.Ty.llvm) → HVector TyDenote.toType tys
+  | [], .nil => .nil
+  | _ :: _, .cons x xs => .cons x (llvmArgsFromHybrid xs)
+
+ /-
+ typeclass instance problem is stuck, it is often due to metavariable
+  DialectSignature ?m.791
+ -/
+  -- HVector.map' (fun ty => (_ : LLVM.Op)) _ args
+
+def riscvArgsFromHybrid : {tys : List RISCV64.RV64.Ty} → HVector TyDenote.toType (tys.map LLVMRiscV.Ty.riscv) → HVector TyDenote.toType tys
+  | [], .nil => .nil
+  | _ :: _, .cons x xs => .cons x (riscvArgsFromHybrid xs)
+
 @[simp, reducible]
 instance : DialectDenote (LLVMPlusRiscV) where
   denote
-  | .riscv (riscvOp), args , x  => DialectDenote.denote riscvOp args x
-  | .llvm (llvmOp), args , x  => DialectDenote.denote llvmOp args x
+  | .llvm (llvmOp), args , .nil  => DialectDenote.denote llvmOp (llvmArgsFromHybrid args) .nil
+  | .riscv (riscvOp), args , .nil  => DialectDenote.denote riscvOp (riscvArgsFromHybrid args) .nil
+  | .builtin.unrealized_conversion_cast.riscvToLLVM, elemToCast, _  => builtin.unrealized_conversion_cast.riscvToLLVM (elemToCast.getN 0 (by simp [DialectSignature.sig, signature]))
+  | .builtin.unrealized_conversion_cast.LLVMToriscv, elemToCast, _  => builtin.unrealized_conversion_cast.LLVMToriscv (elemToCast.getN 0 (by simp [DialectSignature.sig, signature]))
 
- /- | .riscv (riscvOp),_,_  =>
-    match riscvOp with
-    |.const val  => BitVec.ofInt 64 val -- const test case to figure out design
-    | _ => BitVec.ofInt 64 0
-  | .llvm llvmOp,_,_  =>
-     match llvmOp  with
-    |.const width val => some (BitVec.ofInt width val) -- const test case -/
+def ctxtTransformToLLVM  (Γ : Ctxt LLVMPlusRiscV.Ty) :=
+  Ctxt.map  (fun ty  =>
+    match ty with
+    | .llvm someLLVMTy => someLLVMTy
+    | .riscv _  => .bitvec 999
+  ) Γ
 
+def ctxtTransformToRiscV (Γ : Ctxt LLVMPlusRiscV.Ty) :=
+  Ctxt.map  (fun ty  =>
+    match ty with
+    | .riscv someRiscVTy  => someRiscVTy
+    | _  => .bv -- unsure what to return here because want to signal in case transformation is not valid
+  ) Γ
+
+
+def transformExprLLVM (e : Expr (InstCombine.MetaLLVM 0) (ctxtTransformToLLVM Γ) eff ty) :=
+  match e with
+  | Expr.mk op1 ty_eq1 eff_le1 args1 regArgs1 =>
+      Expr.mk
+      (op := LLVMPlusRiscV.Op.llvm op1 )
+      (eff_le := eff_le1 )
+      (ty_eq := by rfl)
+      (args := _ )-- .cons e₁ <| .cons e₂ .nil)
+      (regArgs := HVector.nil)
+      -- LLVMPlusRiscV Γ eff (.llvm ty)
+
+def transformExprLLVMCasesArgs  (e : Expr (InstCombine.MetaLLVM 0) (ctxtTransformToLLVM Γ) eff ty) :=
+  match e with
+  | Expr.mk op1 ty_eq1 eff_le1 args regArgs1 =>
+      Expr.mk
+      (op := LLVMPlusRiscV.Op.llvm op1 )
+      (eff_le := eff_le1 )
+      (ty_eq := by rfl)
+      (args := _ )-- .cons e₁ <| .cons e₂ .nil)
+      (regArgs := HVector.nil)
+      -- LLVMPlusRiscV Γ eff (.llvm ty)
+/-
+
+def rem {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
+  Expr.mk
+    (op := Op.rem)
+    (eff_le := by constructor)
+    (ty_eq := by rfl)
+    (args := .cons e₁ <| .cons e₂ .nil)
+    (regArgs := HVector.nil)
+
+-/
+
+
+
+
+#check Expr.mk
+#check Ctxt.Var
+
+def transformExprRiscV (e : Expr (InstCombine.MetaLLVM 0) (ctxtTransformToLLVM Γ) eff ty) :  Expr LLVMPlusRiscV Γ eff (LLVMRiscV.Ty.llvm ty)  :=
+  sorry
 
 def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
   MLIR.AST.ReaderM (LLVMPlusRiscV) (Σ eff ty, Expr (LLVMPlusRiscV) Γ eff ty) := do
-  -- RiscvMkExpr.mkExpr Γ opStx -- get type errors regarding the type of context Γ
+
+  let llvmParse := InstcombineTransformDialect.mkExpr (ctxtTransformToLLVM  Γ) opStx (← read)
+  match llvmParse with
+    | .ok ⟨eff, ty, expr⟩ => -- returns llvm expression
+      return ⟨eff, (.llvm ty),  expr⟩
+      --llvmParse
+       -- transform the expression back
+    | .error (.unsupportedOp _) => do
+     let ⟨eff, (ty) , expr⟩ ← RiscvMkExpr.mkExpr (ctxtTransformToRiscV Γ) opStx (← read)
+      --let ⟨eff, ty, expr⟩ ← ...
+      -- parse it as riscv
+     -- transform the expression back into my context
+      return _
+    | .error e => throw <| .generic s!"Ill-formed program, coulnd't parse it as llvm nor riscv."
 
 
 
+instance : MLIR.AST.TransformExpr (LLVMPlusRiscV) 0 where
+  mkExpr := mkExpr
 
 end LLVMRiscV
 -- etc for the other instances, each time just pattern-matching on whether the op/ty came from LLVM or RiscV, and dispatching to the relevant instance

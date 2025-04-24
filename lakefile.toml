@@ -9,7 +9,7 @@ name = "RiscvDialect"
 [[require]]
 name = "SSA"
 git = "https://github.com/opencompl/lean-mlir.git"
-rev = "simp-denote"
+rev = "changeTransformError"
 
 [[require]]
 name = "Lean_RV64D_LEAN"

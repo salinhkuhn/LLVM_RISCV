@@ -487,7 +487,7 @@ instance instTransformTy : MLIR.AST.TransformTy llvm.riscv 0 where
 def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
   MLIR.AST.ReaderM (llvm.riscv) (Σ eff ty, Expr (llvm.riscv) Γ eff ty) := do
     match mkExpr with -- use the llvm parser else use the riscv parser
-    
+
 
 
 -- idea have a type that is either llvm type or riscv type
