@@ -52,19 +52,39 @@ BitVec.setWidth 64
         (BitVec.extractLsb 5 0 rs2_val).toNat
         (BitVec.signExtend
           (64 + (BitVec.extractLsb 5 0 rs2_val).toNat) rs1_val))
--- TO DO
-example (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec.setWidth 64
-      (BitVec.extractLsb
-        (63 + (BitVec.extractLsb 5 0 rs2_val).toNat)
-        (BitVec.extractLsb 5 0 rs2_val).toNat
-        (BitVec.signExtend
-          (64 + (BitVec.extractLsb 5 0 rs2_val).toNat) rs1_val)) = BitVec.sshiftRight rs1val (BitVec.extractLsb 5 0 rs2_val).toNat  := by
-          simp [BitVec.extractLsb]
-          have h1: 63 + rs2_val.toNat % 64 - rs2_val.toNat % 64 + 1 = 64 := by
-            simp
-          rw [h1]
-          simp [BitVec.sshiftRight]
-          sorry
+
+theorem sshiftRight_eq_setWidth_extractLsb_signExtend {w : Nat} (n : Nat) (x : BitVec w) :
+    x.sshiftRight n =
+    ((x.signExtend (w + n)).extractLsb (w - 1 + n) n).setWidth w := by
+  ext i hi
+  simp [BitVec.getElem_sshiftRight]
+  simp [show i ≤ w - 1 by omega]
+  simp [BitVec.getLsbD_signExtend]
+  by_cases hni : (n + i) < w <;> simp [hni] <;> omega
+
+-- TODO: @bollu says: complain to the sail→lean people to not create toNats, WTF.
+theorem sshiftRight_eq_sshiftRight_extractLsb {w : Nat}
+    {lw : Nat} (hlw : 2^lw = w)
+    (x y : BitVec w) : x.sshiftRight y.toNat = x.sshiftRight (y.extractLsb (lw - 1) 0).toNat := by
+  /-
+  proof strategy:
+  - show that if y has any set bits in indices [w..lw], then x.sshiftRight y = 0.
+    (If y is >= w, then x.sshiftRight y = 0)
+  - Otherwise, we know that y has no set bits in the range [w..lw], and therefore, y.toNat = y[0:lw].toNat
+    Hence, the shift amounts have the same value.
+  -/
+  sorry
+
+theorem RTYPE_pure64_RISCV_SRA_eq_sshiftRight (x y : BitVec 64) :
+    RTYPE_pure64_RISCV_SRA y x = x.sshiftRight' y := by
+  rw [BitVec.sshiftRight']
+  rw [sshiftRight_eq_sshiftRight_extractLsb (lw := 6) (hlw := rfl)]
+  rw [RTYPE_pure64_RISCV_SRA]
+  rw [sshiftRight_eq_setWidth_extractLsb_signExtend]
+  rfl
+
+
+
 
 
 example (rs2_val : BitVec 64) (rs1_val : BitVec 64) :  BitVec.extractLsb' 0 64
@@ -185,11 +205,16 @@ inductive Ty -- here belongs what my operations operate on
   -- need to add the llvm option type
   deriving DecidableEq, Repr
 
+
 open TyDenote (toType) in
 instance LLVMRISCVTyDenote : TyDenote Ty where
 toType := fun
 | Ty.bv => BitVec 64
 | Ty.bitvec => Option (BitVec 64)
+
+instance : ToString (Ty) where
+  toString t := repr t |>.pretty
+
 
 abbrev llvm.riscv : Dialect where
   Op := Op -- define the avaiable operations
@@ -198,76 +223,76 @@ abbrev llvm.riscv : Dialect where
 @[simp, reducible] -- this basically will be the contexts
 def Op.sig : Op → List Ty
 |riscv.add => [Ty.bv, Ty.bv]
-|llvm.add _ _ => [Ty.opt64, Ty.opt64] -- defines it as an optional value and if passed overwrites the default value, else default value.
-|riscv.sub => [Ty.bv64, Ty.bv64]
-|llvm.sub _ _ => [Ty.opt64, Ty.opt64]
-|llvm.not _ => [Ty.opt64]
+|llvm.add _ _ => [Ty.bitvec, Ty.bitvec] -- defines it as an optional value and if passed overwrites the default value, else default value.
+|riscv.sub => [Ty.bv, Ty.bv ]
+|llvm.sub _ _ => [Ty.bitvec, Ty.bitvec]
+|llvm.not _ => [Ty.bitvec]
 |riscv.li val => []
 |riscv.const val => []
 |llvm.const _ val => []
-|llvm.neg _ => [Ty.opt64]
-|llvm.and _ => [Ty.opt64, Ty.opt64]
-|riscv.and => [Ty.bv64, Ty.bv64]
-|llvm.or _ _ => [Ty.opt64, Ty.opt64]
-|riscv.or => [Ty.bv64, Ty.bv64]
-|llvm.xor _ => [Ty.opt64, Ty.opt64]
-|riscv.xor => [Ty.bv64, Ty.bv64]
-|llvm.shl _ _ => [Ty.opt64, Ty.opt64]
-|riscv.sll => [Ty.bv64, Ty.bv64]
-|llvm.lshr _ _  => [Ty.opt64, Ty.opt64]
-|riscv.sra => [Ty.bv64, Ty.bv64]
-|riscv.srl => [Ty.bv64, Ty.bv64]
-|llvm.ashr _ _ => [Ty.opt64, Ty.opt64]
-|llvm.sdiv _ _ => [Ty.opt64, Ty.opt64]
-|riscv.div => [Ty.bv64, Ty.bv64]
-|llvm.udiv _ _ => [Ty.opt64, Ty.opt64]
-|riscv.divu => [Ty.bv64, Ty.bv64]
-|llvm.urem _  =>  [Ty.opt64, Ty.opt64]
-|riscv.remu => [Ty.bv64, Ty.bv64]
-|llvm.srem _ => [Ty.opt64, Ty.opt64]
-|riscv.rem => [Ty.bv64, Ty.bv64]
-|llvm.mul _ _ => [Ty.opt64, Ty.opt64]
-|riscv.mul => [Ty.bv64, Ty.bv64 ]
-|builtin.unrealized_conversion_cast.riscvToLLVM => [Ty.bv64] --bit vector to option bit vector
-|builtin.unrealized_conversion_cast.LLVMToriscv => [Ty.opt64] -- option bit vector to concrete bit vector
+|llvm.neg _ => [Ty.bitvec]
+|llvm.and _ => [Ty.bitvec, Ty.bitvec]
+|riscv.and =>[Ty.bv, Ty.bv ]
+|llvm.or _ _ => [Ty.bitvec, Ty.bitvec]
+|riscv.or => [Ty.bv, Ty.bv ]
+|llvm.xor _ => [Ty.bitvec, Ty.bitvec]
+|riscv.xor => [Ty.bv, Ty.bv ]
+|llvm.shl _ _ => [Ty.bitvec, Ty.bitvec]
+|riscv.sll => [Ty.bv, Ty.bv ]
+|llvm.lshr _ _  => [Ty.bitvec, Ty.bitvec]
+|riscv.sra => [Ty.bv, Ty.bv ]
+|riscv.srl => [Ty.bv, Ty.bv ]
+|llvm.ashr _ _ => [Ty.bitvec, Ty.bitvec]
+|llvm.sdiv _ _ => [Ty.bitvec, Ty.bitvec]
+|riscv.div => [Ty.bv, Ty.bv ]
+|llvm.udiv _ _ =>[Ty.bitvec, Ty.bitvec]
+|riscv.divu => [Ty.bv, Ty.bv ]
+|llvm.urem _  => [Ty.bitvec, Ty.bitvec]
+|riscv.remu => [Ty.bv, Ty.bv]
+|llvm.srem _ => [Ty.bitvec, Ty.bitvec]
+|riscv.rem => [Ty.bv, Ty.bv ]
+|llvm.mul _ _ => [Ty.bitvec, Ty.bitvec]
+|riscv.mul => [Ty.bv, Ty.bv ]
+|builtin.unrealized_conversion_cast.riscvToLLVM => [Ty.bv] --bit vector to option bit vector
+|builtin.unrealized_conversion_cast.LLVMToriscv => [Ty.bitvec] -- option bit vector to concrete bit vector
 
 
 @[simp, reducible] -- reduceable means this expression can always be expanded by the type checker when type checking
 -- output signature , part of an op
 def Op.outTy : Op  → Ty
 |riscv.add => .bv
-|llvm.add _ flags => .opt64
-|riscv.sub => .bv64
-|llvm.sub _ _ => .opt64
-|llvm.not _ => .opt64
-|riscv.li val  => .bv64
-|riscv.const val  => .bv64
-|llvm.const _ val  => .opt64
-|llvm.neg _ => .opt64
-|llvm.and _ => .opt64
-|riscv.and => .bv64
-|llvm.or _ _ => .opt64
-|riscv.or => .bv64
-|llvm.xor _ => .opt64
-|riscv.xor => .bv64
-|llvm.shl _ _ => .opt64
-|riscv.sll => .bv64
-|llvm.lshr _ _ => .opt64
-|riscv.srl => .bv64
-|riscv.sra => .bv64
-|llvm.ashr _ _ => .opt64
-|llvm.sdiv _ _ => .opt64
-|riscv.div => .bv64
-|llvm.udiv _ _ => .opt64
-|riscv.divu => .bv64
-|llvm.urem _ => .opt64
-|riscv.remu => .bv64
-|llvm.srem _ => .opt64
-|riscv.rem => .bv64
-|llvm.mul _ _ => .opt64
-|riscv.mul => .bv64
-|builtin.unrealized_conversion_cast.riscvToLLVM => .opt64 -- casting bit vector to option bit vector
-|builtin.unrealized_conversion_cast.LLVMToriscv => .bv64 -- casting option bit vector to bit vector
+|llvm.add _ flags => .bitvec
+|riscv.sub => .bv
+|llvm.sub _ _ => .bitvec
+|llvm.not _ => .bitvec
+|riscv.li val  => .bv
+|riscv.const val  => .bv
+|llvm.const _ val  => .bitvec
+|llvm.neg _ => .bitvec
+|llvm.and _ => .bitvec
+|riscv.and => .bv
+|llvm.or _ _ => .bitvec
+|riscv.or => .bv
+|llvm.xor _ => .bitvec
+|riscv.xor => .bv
+|llvm.shl _ _ => .bitvec
+|riscv.sll => .bv
+|llvm.lshr _ _ => .bitvec
+|riscv.srl => .bv
+|riscv.sra => .bv
+|llvm.ashr _ _ => .bitvec
+|llvm.sdiv _ _ => .bitvec
+|riscv.div => .bv
+|llvm.udiv _ _ => .bitvec
+|riscv.divu => .bv
+|llvm.urem _ => .bitvec
+|riscv.remu => .bv
+|llvm.srem _ => .bitvec
+|riscv.rem => .bv
+|llvm.mul _ _ => .bitvec
+|riscv.mul => .bv
+|builtin.unrealized_conversion_cast.riscvToLLVM => .bitvec-- casting bit vector to option bit vector
+|builtin.unrealized_conversion_cast.LLVMToriscv => .bv -- casting option bit vector to bit vector
 @[simp, reducible]
 def Op.signature : Op → Signature (Ty) :=
   fun o => {sig := Op.sig o, outTy := Op.outTy o, regSig := []}
@@ -351,7 +376,7 @@ def riscv.add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr llvm.riscv Γ .p
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def llvm.add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bitvec) : Expr llvm.riscv Γ .pure .bitvec  :=
   Expr.mk
     (op := llvm.riscv.Op.llvm.add 64)
     (eff_le := by constructor)
@@ -359,7 +384,7 @@ def llvm.add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ 
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def riscv.sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv64) : Expr llvm.riscv Γ .pure .bv64  :=
+def riscv.sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr llvm.riscv Γ .pure .bv  :=
   Expr.mk
     (op := llvm.riscv.Op.riscv.sub)
     (eff_le := by constructor)
@@ -367,7 +392,7 @@ def riscv.sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv64) : Expr llvm.riscv Γ 
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def llvm.sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bitvec) : Expr llvm.riscv Γ .pure .bitvec  :=
   Expr.mk
     (op := llvm.riscv.Op.llvm.sub 64)
     (eff_le := by constructor)
@@ -375,7 +400,7 @@ def llvm.sub {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ 
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def llvm.not {Γ : Ctxt _} (e₁: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.not {Γ : Ctxt _} (e₁: Ctxt.Var Γ .bitvec) : Expr llvm.riscv Γ .pure .bitvec  :=
     Expr.mk
     (op := llvm.riscv.Op.llvm.not 64)
     (eff_le := by constructor)
@@ -383,7 +408,7 @@ def llvm.not {Γ : Ctxt _} (e₁: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure
     (args := .cons e₁ <| .nil)
     (regArgs := HVector.nil)
 
-def llvm.neg {Γ : Ctxt _} (e₁: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.neg {Γ : Ctxt _} (e₁: Ctxt.Var Γ .bitvec) : Expr llvm.riscv Γ .pure .bitvec  :=
     Expr.mk
     (op := llvm.riscv.Op.llvm.neg 64)
     (eff_le := by constructor)
@@ -391,7 +416,7 @@ def llvm.neg {Γ : Ctxt _} (e₁: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure
     (args := .cons e₁ <| .nil)
     (regArgs := HVector.nil)
 
-def llvm.and {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.and {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bitvec) : Expr llvm.riscv Γ .pure .bitvec  :=
   Expr.mk
     (op := llvm.riscv.Op.llvm.and 64)
     (eff_le := by constructor)
@@ -399,7 +424,7 @@ def llvm.and {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ 
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def llvm.or {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.or {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bitvec) : Expr llvm.riscv Γ .pure .bitvec  :=
   Expr.mk
     (op := llvm.riscv.Op.llvm.or 64)
     (eff_le := by constructor)
@@ -407,7 +432,7 @@ def llvm.or {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def llvm.xor {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.xor {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bitvec) : Expr llvm.riscv Γ .pure .bitvec  :=
   Expr.mk
     (op := llvm.riscv.Op.llvm.xor 64)
     (eff_le := by constructor)
@@ -415,7 +440,7 @@ def llvm.xor {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ 
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def riscv.mul {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv64) : Expr llvm.riscv Γ .pure .bv64  :=
+def riscv.mul {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr llvm.riscv Γ .pure .bv  :=
   Expr.mk
     (op := llvm.riscv.Op.riscv.mul)
     (eff_le := by constructor)
@@ -423,7 +448,7 @@ def riscv.mul {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv64) : Expr llvm.riscv Γ 
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def llvm.mul {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.mul {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bitvec) : Expr llvm.riscv Γ .pure .bitvec  :=
   Expr.mk
     (op := llvm.riscv.Op.llvm.mul 64)
     (eff_le := by constructor)
@@ -431,7 +456,7 @@ def llvm.mul {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .opt64) : Expr llvm.riscv Γ 
     (args := .cons e₁ <| .cons e₂ .nil)
     (regArgs := HVector.nil)
 
-def riscv.const {Γ : Ctxt _} (n : ℤ) : Expr llvm.riscv Γ .pure .bv64  :=
+def riscv.const {Γ : Ctxt _} (n : ℤ) : Expr llvm.riscv Γ .pure .bv  :=
   Expr.mk
     (op := llvm.riscv.Op.riscv.const n)
     (eff_le := by constructor)
@@ -439,7 +464,7 @@ def riscv.const {Γ : Ctxt _} (n : ℤ) : Expr llvm.riscv Γ .pure .bv64  :=
     (args := .nil)
     (regArgs := HVector.nil)
 
-def llvm.const {Γ : Ctxt _} (n : ℤ) : Expr llvm.riscv Γ .pure .opt64  :=
+def llvm.const {Γ : Ctxt _} (n : ℤ) : Expr llvm.riscv Γ .pure .bitvec  :=
   Expr.mk
     (op := llvm.riscv.Op.llvm.const 64 n)
     (eff_le := by constructor)
@@ -471,7 +496,7 @@ def mkTy : MLIR.AST.MLIRType φ → MLIR.AST.ExceptM llvm.riscv llvm.riscv.Ty
     match s with
     | "r64" => return .bv --maybe change it later
     | "riscv.reg" => return .bv -- to make it compatible with the MLIR representation of riscv.
-    | "i64" => return .opt64
+    | "i64" => return .bitvec
     | _ => throw .unsupportedType
   | _ => throw .unsupportedType
 
@@ -482,17 +507,18 @@ instance instTransformTy : MLIR.AST.TransformTy llvm.riscv 0 where
   |.builtin.unrealized_conversion_cast.riscvToLLVM, elemToCast, _  => riscv.semantics.builtin.unrealized_conversion_cast.riscvToLLVM  (elemToCast.getN 0 (by simp [DialectSignature.sig, signature]))
   |.builtin.unrealized_conversion_cast.LLVMToriscv, elemToCast,
 
--/
-
-def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
+  def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
   MLIR.AST.ReaderM (llvm.riscv) (Σ eff ty, Expr (llvm.riscv) Γ eff ty) := do
     match mkExpr with -- use the llvm parser else use the riscv parser
 
 
 
+-/
 -- idea have a type that is either llvm type or riscv type
 -- implement staged parsing --> llvm to riscv
-/-
+
+
+
 def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
   MLIR.AST.ReaderM (llvm.riscv) (Σ eff ty, Expr (llvm.riscv) Γ eff ty) := do
     match opStx.args with
@@ -503,7 +529,7 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
           | .int val ty, "riscv.li" =>
             let opTy← mkTy ty -- ty.mkTy
             match h: opTy with
-            | .bv64 =>
+            | .bv =>
               return ⟨.pure, opTy, ⟨
                 .riscv.li (val), -- needed to add this extra mechanism in parsing
                 by
@@ -518,29 +544,29 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
     | v₁Stx :: [] =>
        let ⟨ty₁, v₁⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₁Stx
        match ty₁, opStx.name with
-       | .opt64 , "llvm.neg"=> -- unsure if handeld flags correctly
-              return ⟨ .pure, .opt64 ,⟨.llvm.neg 64 , by rfl, by constructor,
+       | .bitvec , "llvm.neg"=> -- unsure if handeld flags correctly
+              return ⟨ .pure, .bitvec ,⟨.llvm.neg 64 , by rfl, by constructor,
                .cons v₁ <| .nil,
                 .nil⟩⟩
-       | .opt64 , "llvm.not"=> -- unsure if handeld flags correctly
-              return ⟨ .pure, .opt64 ,⟨ .llvm.not 64 , by rfl, by constructor,
+       | .bitvec , "llvm.not"=> -- unsure if handeld flags correctly
+              return ⟨ .pure, .bitvec ,⟨ .llvm.not 64 , by rfl, by constructor,
                .cons v₁ <| .nil,
                 .nil⟩⟩
-        | .bv64 , "builtin.unrealized_conversion_cast.riscvToLLVM"=>
-              return ⟨ .pure, .opt64 ,⟨ .builtin.unrealized_conversion_cast.riscvToLLVM , by rfl, by constructor,
+        | .bv , "builtin.unrealized_conversion_cast.riscvToLLVM"=>
+              return ⟨ .pure, .bitvec ,⟨ .builtin.unrealized_conversion_cast.riscvToLLVM , by rfl, by constructor,
                .cons v₁ <| .nil,
                 .nil⟩⟩
-        | .opt64 , "builtin.unrealized_conversion_cast.LLVMToriscv"=>
-              return ⟨ .pure, .bv64 ,⟨ .builtin.unrealized_conversion_cast.LLVMToriscv , by rfl, by constructor,
+        | .bitvec , "builtin.unrealized_conversion_cast.LLVMToriscv"=>
+              return ⟨ .pure, .bv ,⟨ .builtin.unrealized_conversion_cast.LLVMToriscv , by rfl, by constructor,
                .cons v₁ <| .nil,
                 .nil⟩⟩
-        | .opt64 , "llvm.const"=> -- unsure if handeld flags correctly
+        | .bitvec , "llvm.const"=> -- unsure if handeld flags correctly
             let some att := opStx.attrs.getAttr "val"
               | throw <| .unsupportedOp s!"no attirbute in constant value provided {repr opStx}"
               match att with
               | .int val ty => -- ides modell it as a list of 3 bools
                 --let opTy@(.opt64) ← mkTy ty -- ty.mkTy -- potential debug
-                return ⟨.pure, .opt64, ⟨
+                return ⟨.pure, .bitvec, ⟨
                   .llvm.const 64 val,
                   by
                   simp[DialectSignature.outTy, signature]
@@ -556,78 +582,78 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
         let ⟨ty₁, v₁⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₁Stx
         let ⟨ty₂, v₂⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₂Stx
         match ty₁, ty₂, opStx.name with
-        | .bv64 , .bv64 , "riscv.add" => --refers to an assembly add
-              return ⟨ .pure, .bv64 ,⟨ .riscv.add, by rfl, by constructor,
+        | .bv , .bv , "riscv.add" => --refers to an assembly add
+              return ⟨ .pure, .bv ,⟨ .riscv.add, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.sub" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.sub, by rfl, by constructor,
+        | .bv , .bv , "riscv.sub" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.sub, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.and" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.and, by rfl, by constructor,
+        | .bv , .bv , "riscv.and" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.and, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.xor" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.xor, by rfl, by constructor,
+        | .bv , .bv , "riscv.xor" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.xor, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.sll" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.sll, by rfl, by constructor,
+        | .bv, .bv , "riscv.sll" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.sll, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.or" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.or, by rfl, by constructor,
+        | .bv , .bv , "riscv.or" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.or, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.srl" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.srl, by rfl, by constructor,
+        | .bv , .bv , "riscv.srl" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.srl, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.sra" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.sra, by rfl, by constructor,
+        | .bv , .bv , "riscv.sra" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.sra, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.div" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.div, by rfl, by constructor,
+        | .bv, .bv , "riscv.div" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.div, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.divu" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.divu, by rfl, by constructor,
+        | .bv , .bv , "riscv.divu" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.divu, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.remu" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.remu, by rfl, by constructor,
+        | .bv , .bv , "riscv.remu" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.remu, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.rem" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.remu, by rfl, by constructor,
+        | .bv , .bv , "riscv.rem" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.rem, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .bv64 , .bv64 , "riscv.mul" =>
-              return ⟨ .pure, .bv64 ,⟨ .riscv.mul, by rfl, by constructor,
+        | .bv , .bv , "riscv.mul" =>
+              return ⟨ .pure, .bv ,⟨ .riscv.mul, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.add" => -- unsure if handeld flags correctly
+        | .bitvec , .bitvec , "llvm.add" => -- unsure if handeld flags correctly
 
-              return ⟨ .pure, .opt64 ,⟨ .llvm.add 64 , by rfl, by constructor,
+              return ⟨ .pure, .bitvec ,⟨ .llvm.add 64 , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.sub" => -- unsure if handeld flags correctly
-              return ⟨ .pure, .opt64 ,⟨ .llvm.sub 64 , by rfl, by constructor,
+        | .bitvec ,.bitvec , "llvm.sub" => -- unsure if handeld flags correctly
+              return ⟨ .pure, .bitvec ,⟨ .llvm.sub 64 , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.and" => -- unsure if handeld flags correctly
-              return ⟨ .pure, .opt64 ,⟨ .llvm.and 64 , by rfl, by constructor,
+        | .bitvec , .bitvec , "llvm.and" => -- unsure if handeld flags correctly
+              return ⟨ .pure, .bitvec ,⟨ .llvm.and 64 , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
           -- TO DO handle the attributes
           /-
           add, sub, or, shl, lshr, ashr, sdiv, udiv, mul have flags
           -/
-        | .opt64 , .opt64 , "llvm.or" => do -- unsure if handeld flags correctly, flags are wrong atm
+        | .bitvec , .bitvec , "llvm.or" => do -- unsure if handeld flags correctly, flags are wrong atm
             let att := opStx.attrs.getAttr "disjoint"
-                return ⟨.pure, .opt64, ⟨
+                return ⟨.pure, .bitvec, ⟨
                   .llvm.or 64 ⟨att.isSome⟩,
                   by
                   simp[DialectSignature.outTy, signature]
@@ -636,49 +662,49 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
                   .cons v₁ <| .cons v₂ <| .nil,
                   .nil
                 ⟩⟩
-        | .opt64 , .opt64 , "llvm.xor" => -- unsure if handeld flags correctly
-              return ⟨ .pure, .opt64 ,⟨ .llvm.and 64 , by rfl, by constructor,
+        | .bitvec , .bitvec , "llvm.xor" => -- unsure if handeld flags correctly
+              return ⟨ .pure, .bitvec ,⟨ .llvm.xor 64 , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.lshr" => do -- unsure if handeld flags correctly
+        | .bitvec , .bitvec , "llvm.lshr" => do -- unsure if handeld flags correctly
               let exactFlag := opStx.attrs.getAttr "exact"
-              return ⟨ .pure, .opt64 ,⟨ .llvm.lshr 64 ⟨exactFlag.isSome⟩ , by rfl, by constructor,
+              return ⟨ .pure, .bitvec ,⟨ .llvm.lshr 64 ⟨exactFlag.isSome⟩ , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.ashr" => do -- unsure if handeld flags correctly
+        | .bitvec ,.bitvec , "llvm.ashr" => do -- unsure if handeld flags correctly
           let exactFlag := opStx.attrs.getAttr "exact"
-              return ⟨ .pure, .opt64 ,⟨ .llvm.ashr 64 ⟨exactFlag.isSome⟩ , by rfl, by constructor,
+              return ⟨ .pure, .bitvec,⟨ .llvm.ashr 64 ⟨exactFlag.isSome⟩ , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.sdiv" => do -- unsure if handeld flags correctly
+        | .bitvec , .bitvec , "llvm.sdiv" => do -- unsure if handeld flags correctly
               let exactFlag := opStx.attrs.getAttr "exact"
-              return ⟨ .pure, .opt64 ,⟨ .llvm.ashr 64 ⟨exactFlag.isSome⟩ , by rfl, by constructor,
+              return ⟨ .pure, .bitvec ,⟨ .llvm.sdiv 64 ⟨exactFlag.isSome⟩ , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.udiv" => do -- unsure if handeld flags correctly
+        | .bitvec , .bitvec , "llvm.udiv" => do -- unsure if handeld flags correctly
               let exactFlag := opStx.attrs.getAttr "exact"
-              return ⟨ .pure, .opt64 ,⟨ .llvm.udiv 64 ⟨exactFlag.isSome⟩, by rfl, by constructor,
+              return ⟨ .pure, .bitvec ,⟨ .llvm.udiv 64 ⟨exactFlag.isSome⟩, by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.shl" => do -- unsure if handeld flags correctly
-              return ⟨ .pure, .opt64 ,⟨ .llvm.shl 64 , by rfl, by constructor,
+        | .bitvec , .bitvec, "llvm.shl" => do -- unsure if handeld flags correctly
+              return ⟨ .pure, .bitvec ,⟨ .llvm.shl 64 , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.srem" => -- unsure if handeld flags correctly
-              return ⟨ .pure, .opt64 ,⟨ .llvm.srem 64 , by rfl, by constructor,
+        | .bitvec , .bitvec , "llvm.srem" => -- unsure if handeld flags correctly
+              return ⟨ .pure, .bitvec ,⟨ .llvm.srem 64 , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.urem" => -- unsure if handeld flags correctly
-              return ⟨ .pure, .opt64 ,⟨ .llvm.urem 64 , by rfl, by constructor,
+        | .bitvec , .bitvec , "llvm.urem" => -- unsure if handeld flags correctly
+              return ⟨ .pure,.bitvec ,⟨ .llvm.urem 64 , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
-        | .opt64 , .opt64 , "llvm.mul" =>
-              return ⟨ .pure, .opt64 ,⟨ .llvm.mul 64   , by rfl, by constructor,
+        | .bitvec , .bitvec , "llvm.mul" =>
+              return ⟨ .pure, .bitvec ,⟨ .llvm.mul 64   , by rfl, by constructor,
                .cons v₁ <| .cons v₂ <| .nil,
                 .nil⟩⟩
         | _ ,_, _ => throw <| .unsupportedOp s!"wrong number of arguemnts, more than 2 arguemnts  {repr opStx}"
     | _  => throw <| .unsupportedOp "didnt implement instruction yet "
--/
+
 
 instance : MLIR.AST.TransformExpr (llvm.riscv) 0 where
   mkExpr := mkExpr
@@ -722,7 +748,7 @@ def exampleLLVMOr  :=
   %1 = "llvm.or" (%0, %0) { } : (!i64, !i64 ) -> (!i64)
   "return" (%1) : ( !i64) -> ()
 }]
-def exampleRiscv : Com llvm.riscv [.bv64] .pure .bv64 :=
+def exampleRiscv : Com llvm.riscv [.bv] .pure .bv :=
 [_| {
   ^entry (%0: !r64 ):
   %1 = "riscv.add" (%0, %0) : (!r64, !r64 ) -> (!r64)
@@ -731,14 +757,14 @@ def exampleRiscv : Com llvm.riscv [.bv64] .pure .bv64 :=
 
 
  def LLVMCtxtToRV (Γ : Ctxt llvm.riscv.Ty) : Ctxt llvm.riscv.Ty :=
-  List.replicate Γ.length (.bv64)
+  List.replicate Γ.length (.bv)
 
 /--TO DO: ask for a shorter proof.-/
 
-def LLVMVarToRV : Γ.Var (.opt64) → (LLVMCtxtToRV Γ).Var .bv64
+def LLVMVarToRV : Γ.Var (.bitvec) → (LLVMCtxtToRV Γ).Var .bv
   | ⟨i, h⟩ =>  ⟨i, by
   simp [LLVMCtxtToRV]
-  have hcontra2 : Γ.get? i = some (.opt64) := by exact h
+  have hcontra2 : Γ.get? i = some (.bitvec) := by exact h
   have hcontra3: List.length Γ ≤ i → Γ.get? i  = none := by simp [List.get?]
   have hcontra : i <  Γ.length :=  by
       by_contra h
@@ -746,17 +772,25 @@ def LLVMVarToRV : Γ.Var (.opt64) → (LLVMCtxtToRV Γ).Var .bv64
       have h_none : Γ.get? i = none := hcontra3 h
       rw [hcontra2] at h_none
       contradiction
-  have leng_eq_leng : i < List.length Γ → i < List.length (List.replicate (List.length Γ) Ty.bv64) := by simp
-  have h3 : i < (List.replicate (List.length Γ) Ty.bv64).length := by exact leng_eq_leng hcontra
-  have h4 : (List.replicate (List.length Γ) Ty.bv64)[i] = Ty.bv64 → (List.replicate (List.length Γ) Ty.bv64)[i]? = some Ty.bv64 := by
+  have leng_eq_leng : i < List.length Γ → i < List.length (List.replicate (List.length Γ) Ty.bv) := by simp
+  have h3 : i < (List.replicate (List.length Γ) Ty.bv).length := by exact leng_eq_leng hcontra
+  have h4 : (List.replicate (List.length Γ) Ty.bv)[i] = Ty.bv → (List.replicate (List.length Γ) Ty.bv)[i]? = some Ty.bv := by
         simp [List.get?_eq_some]
         exact hcontra
   apply h4
   simp
   ⟩
 
+
+-- function that rewrites ahn expression into a computation
+variable {d} [DialectSignature d]
+def Com.ofExpr : Expr d Γ eff t → Com d Γ eff t := fun e =>
+  Com.var e <| Com.ret <| Ctxt.Var.last _ _
+
+
+
 -- do I need to establish a context mapping or exetend the context Γ
-def lowerSimpleIRInstructionDialect (e : Expr llvm.riscv Γ .pure .opt64) :  Expr llvm.riscv (LLVMCtxtToRV Γ) .pure .bv64 :=
+def lowerSimpleIRInstructionDialect (e : Expr llvm.riscv Γ .pure .bitvec) :  Expr llvm.riscv (LLVMCtxtToRV Γ) .pure .bv :=
   match e with
   | Expr.mk
     (.llvm.add 64 flags)
@@ -778,56 +812,122 @@ def lowerSimpleIRInstructionDialect (e : Expr llvm.riscv Γ .pure .opt64) :  Exp
     (regArgs := .nil)
 
     -- still wrong type
-def loweringLLVMtoRISCV : {Γ : Ctxt llvm.riscv.Ty} → (com : Com llvm.riscv Γ .pure (.opt64)) → Option (Com llvm.riscv (LLVMCtxtToRV Γ)  .pure (.bv64))
+def loweringLLVMtoRISCV : {Γ : Ctxt llvm.riscv.Ty} → (com : Com llvm.riscv Γ .pure (.bitvec)) → Option (Com llvm.riscv (LLVMCtxtToRV Γ)  .pure (.bv))
   | _, Com.ret x  =>  some (Com.ret (LLVMVarToRV x))
-  | _, Com.var (α := llvm.riscv.Ty.opt64) e c' =>
+  | _, Com.var (α := llvm.riscv.Ty.bitvec) e c' =>
         let e' := (lowerSimpleIRInstructionDialect e) -- map the expression to a riscv expression
         match loweringLLVMtoRISCV c' with
         | some com => some (Com.var (e') (com))
         | none => none
-  | _, Com.var (α := llvm.riscv.Ty.bv64) e1 e2 => none --, shoulnt call the lowering on itself some (Com.var (α := llvm.riscv.Ty.bv64) e1 e2) ---
+  | _, Com.var (α := llvm.riscv.Ty.bv) e1 e2 => none --, shoulnt call the lowering on itself some (Com.var (α := llvm.riscv.Ty.bv64) e1 e2) ---
 
 
+/-
+def LLVMCtxtToRVInHybrid  (Γ : Ctxt llvm.riscv.Ty) : Ctxt llvm.riscv.Ty :=
+  List.replicate Γ.length (.bv)
+
+def LLVMValuationToRV {Γ : Ctxt llvm.riscv.Ty} (V : Γ.Valuation) : (LLVMCtxtToRV Γ).Valuation :=
+  fun t v => -- A valuation is a function that takes in a type and variable (index and proof that it has the correspondig type) and returns an value of the correct type.
+    match t with
+    | .bv =>
+      let i : Fin Γ.length := ⟨v.1, by -- extract information from the llvm variable
+          simpa [LLVMCtxtToRV, List.getElem?_eq_some_iff ] using v.prop
+       ⟩ -- this is a simplification for simp [...] at using h where we defined h to be v.prop
+      match h : Γ.get i with -- trick to get a let binding into the list of things we know.
+      | Ty.bitvec w =>
+           let (v' : Γ.Var (Ty.bitvec w)) := ⟨v.1, by
+              simpa [List.getElem?_eq_some_iff,i, i.prop] using h
+        ⟩
+        (V v' : LLVM.IntW w).getD 0#_ |>.setWidth 64
+
+-/
+
+
+/-
+-- need to restrict to to only llvm context vs only riscv context
+theorem lowerSimpleIRInstruction_correct
+    (e : Expr llvm.riscv Γ .pure (.bitvec)) (V : Γ.Valuation) :
+    ∀ x, (e.denote V) = some x → (lowerSimpleIRInstructionDialect e).denote (LLVMValuationToRV V) = x := by
+  intros x h1
+  rcases e with ⟨op1, ty_eq1, eff_le1,args1, regionArgs1⟩
+  case mk =>
+    cases op1
+    case unary w op =>
+      cases op
+      /- case neg => sorry
+      case not => sorry
+      case copy => sorry
+      case trunc => sorry
+      case zext => sorry
+      case sext => sorry-/
+    case binary w op =>
+      cases op
+      case and =>
+        simp at ty_eq1
+        unfold DialectSignature.outTy at ty_eq1
+        simp at ty_eq1
+        simp [signature] at ty_eq1
+        subst ty_eq1
+        simp [lowerSimpleIRInstruction]
+        unfold DialectSignature.sig at args1
+        simp at args1
+        simp only [signature, InstCombine.MOp.sig,InstCombine.MOp.outTy] at args1
+        unfold DialectSignature.effectKind at eff_le1
+        simp at eff_le1
+        simp only [signature] at eff_le1
+        -- simp_peephole at h1 when apply these the whole hyptohesis h vanishes
+        simp_peephole
+        simp
+
+
+-/
 /--
 ## Example Section
 TO DO: implement pretty printing for it
 -/
 -- unrealized_conversion_cast examples
-def unrealized_conversion_cast_testRiscvToLLVM :  Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .opt64 :=
+def unrealized_conversion_cast_testRiscvToLLVM :  Com llvm.riscv (Ctxt.ofList [.bv]) .pure .bitvec:=
   [_| {
     ^entry (%0: !r64 ):
     %1 = "builtin.unrealized_conversion_cast.riscvToLLVM" (%0) : (!r64) -> (!i64)
     "return" (%1) : (!i64) -> ()
   }]
 
-def unrealized_conversion_cast.LLVMToriscv :  Com llvm.riscv (Ctxt.ofList [.opt64]) .pure .bv64 :=
+def unrealized_conversion_cast.LLVMToriscv :  Com llvm.riscv (Ctxt.ofList [.bitvec]) .pure .bv :=
   [_| {
     ^entry (%0: !i64 ):
     %1 = "builtin.unrealized_conversion_cast.LLVMToriscv" (%0) : (!i64) -> (!r64)
     "return" (%1) : (!r64) -> ()
   }]
 
-def exampleLLVM1 : Com llvm.riscv (Ctxt.ofList [.opt64]) .pure .opt64 :=
+def exampleLLVM1 : Com llvm.riscv (Ctxt.ofList [.bitvec]) .pure .bitvec :=
 [_|{
   ^entry (%0: !i64 ):
   %1 = "llvm.add" (%0, %0) : (!i64, !i64 ) -> (!i64)
   "return" (%1) : ( !i64) -> ()
 }]
+#eval loweringLLVMtoRISCV (exampleLLVM1)
 
-def exampleRiscv1 : Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .bv64 :=
+def exampleRiscv1 : Com llvm.riscv (Ctxt.ofList [.bv]) .pure .bv :=
 [_| {
   ^entry (%0: !r64 ):
   %1 = "riscv.add" (%0, %0) : (!r64, !r64 ) -> (!r64)
   "return" (%1) : ( !r64) -> ()
 }]
-def exampleRiscv1PRETTY  : Com llvm.riscv (Ctxt.ofList [.bv64]) .pure .bv64 :=
+def exampleRiscv1PRETTY  : Com llvm.riscv (Ctxt.ofList [.bv]) .pure .bv :=
 [_| {
   ^entry (%0: !r64 ):
   %1 = "riscv.add" (%0, %0) : (!r64, !r64 ) -> (!r64)
   "return" (%1) : ( !r64) -> ()
 }]
 
-#eval exampleRiscv1PRETTY
+
+
+
+
+
+
+
 /-
   %addi32 = arith.addi %lhsi32, %rhsi32 : i32
 }

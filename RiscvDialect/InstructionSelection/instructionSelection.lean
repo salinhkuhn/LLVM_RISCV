@@ -77,7 +77,7 @@ def Com.ofExpr : Expr d Γ eff t → Com d Γ eff t := fun e =>
 
 -- how to proof this :: for all instructions th
 
-def lowerSimpleIRInstruction  (e : Expr LLVM Γ .pure (.bitvec 64)) :  Expr  RV64(LLVMCtxtToRV Γ) .pure (.bv)  :=
+def lowerSimpleIRInstruction  (e : Expr LLVM Γ .pure (.bitvec 64)) :  Expr  RV64 (LLVMCtxtToRV Γ) .pure (.bv)  :=
 match e with
   -- CONST (which is a operation in llvm.mlir dialect but not in llvm ir), check
   | Expr.mk (InstCombine.Op.const 64 val) _ _ (.nil) _  =>
@@ -193,7 +193,7 @@ theorem lowerSimpleIRInstruction_correct
       case sext => sorry-/
     case binary w op =>
       cases op
-      case and =>
+      .
         simp at ty_eq1
         unfold DialectSignature.outTy at ty_eq1
         simp at ty_eq1
@@ -208,7 +208,11 @@ theorem lowerSimpleIRInstruction_correct
         simp only [signature] at eff_le1
         -- simp_peephole at h1 when apply these the whole hyptohesis h vanishes
         simp_peephole
-        simp
+        
+
+
+
+
 
     /-
       case or => sorry
@@ -511,6 +515,7 @@ def llvm_add_sub :=
       %v2 = llvm.sub %v1, %v1 : i64
       llvm.return %v2 : i64
   }]
+#eval  loweringLLVMtoRISCVextended llvm_add_sub
 
 def llvm_const_add :=
     [llvm(64)| {
@@ -526,7 +531,7 @@ def llvm_neg :=
       %v1 = llvm.neg %X :i64
       llvm.return %v1 : i64
   }]
-
+#eval loweringLLVMtoRISCVextended llvm_neg
 def riscv_neg :=
   [RV64_com| {
     ^entry (%X: !i64):

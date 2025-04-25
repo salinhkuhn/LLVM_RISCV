@@ -17,8 +17,8 @@ The strucutre serves as an bundle for the rhs, lhs and the corresponding correct
 
 -- variable (d : Dialect) [DialectSignature d] [TyDenote d.Ty] [DialectDenote d] [Monad d.m] in
 structure RiscVPeepholeRewriteRefine (Γ : Ctxt Ty) where
-  lhs : Com llvm.riscv Γ .pure Ty.opt64
-  rhs : Com llvm.riscv Γ .pure Ty.opt64
+  lhs : Com llvm.riscv Γ .pure Ty.bitvec
+  rhs : Com llvm.riscv Γ .pure Ty.bitvec
   correct : ∀ V, BitVec.Refinement (lhs.denote V : Option _) (rhs.denote V : Option _)
 
 -- TO DO: think of this on a diffrent level maybe directly between two programs instead of requring the same type
@@ -27,7 +27,7 @@ structure RiscVPeepholeRewriteRefine (Γ : Ctxt Ty) where
 /--
 ##  Wrapper for peephole rewriter
 -/
-def RiscVPeepholeRewriteRefine.toPeepholeUNSOUND (self : RiscVPeepholeRewriteRefine Γ) : PeepholeRewrite llvm.riscv Γ .opt64 :=
+def RiscVPeepholeRewriteRefine.toPeepholeUNSOUND (self : RiscVPeepholeRewriteRefine Γ) : PeepholeRewrite llvm.riscv Γ .bitvec :=
   {
     lhs := self.lhs
     rhs := self.rhs
