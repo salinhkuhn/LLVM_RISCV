@@ -1,4 +1,5 @@
 import SSA.Core.MLIRSyntax.EDSL
+import SSA.Projects.InstCombine.LLVM.PrettyEDSL
 import SSA.Core.Framework
 import SSA.Core.Util
 import SSA.Core.Util.ConcreteOrMVar
@@ -6,6 +7,7 @@ import SSA.Projects.InstCombine.ForStd
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.Tactic
 import RiscvDialect.RISCV64.all
+import RiscvDialect.LLVMRiscv.PeepholeRewriteRefine
 set_option pp.fieldNotation false
 open InstCombine(LLVM)
 namespace LLVMRiscV
@@ -15,6 +17,7 @@ and in the Riscv Dialect. -/
 private inductive Ty where
   | llvm : (Dialect.Ty LLVM) -> Ty
   | riscv : (Dialect.Ty RISCV64.RV64) -> Ty
+  deriving DecidableEq, Repr
 
 private inductive Op where
   | llvm : (Dialect.Op LLVM) -> Op
@@ -56,7 +59,7 @@ instance LLVMPlusRiscVSignature : DialectSignature LLVMPlusRiscV where
   | .llvm llvmOp => .llvm <$> DialectSignature.signature llvmOp
   | .riscv riscvOp => .riscv <$> DialectSignature.signature riscvOp
   | .builtin.unrealized_conversion_cast.riscvToLLVM => {sig := [Ty.riscv .bv], outTy := Ty.llvm (.bitvec 64), regSig := []}
-  | .builtin.unrealized_conversion_cast.LLVMToriscv => {sig := [Ty.llvm (.bitvec 64)], outTy := (Ty.riscv .bv), regSig := []}
+  | .builtin.unrealized_conversion_cast.LLVMToriscv => {sig := [Ty.llvm (.bitvec 64)], outTy := (Ty.riscv .bv), regSig := []} -- to do: overthink the 64 again
 /-
 @[simp, reducible]
 def Op.sig : Op → List Ty
@@ -74,6 +77,10 @@ def Op.signature : Op → Signature (Ty) :=
 
 instance : DialectSignature LLVMPlusRiscV := ⟨Op.signature⟩
 -/
+
+instance : ToString (Dialect.Ty LLVMPlusRiscV)  where
+  toString t := repr t |>.pretty
+
 
 def extractllvmArgs : LLVMRiscV.Op → LLVM.Op
   | .llvm llvmOp => llvmOp
@@ -225,6 +232,36 @@ def transformExprLLVM (e : Expr (InstCombine.MetaLLVM 0) (ctxtTransformToLLVM Γ
           (regArgs := HVector.nil)
         -- LLVMPlusRiscV Γ eff (.llvm ty)
 
+def transformExprRISCV (e : Expr (RISCV64.RV64) ( ctxtTransformToRiscV Γ) eff ty) :
+  MLIR.AST.ReaderM (LLVMPlusRiscV) (Expr LLVMPlusRiscV Γ eff (.riscv ty)) :=
+    match e with
+    | Expr.mk op1 ty_eq1 eff_le1 args1 regArgs1 => do
+        -- args1 : HVector (Ctxt.Var (ctxtTransformToLLVM Γ)) (DialectSignature.sig op1)
+        let args' : HVector (Ctxt.Var Γ) (.riscv <$> DialectSignature.sig op1) ←
+          args1.ubermapM fun t v => do
+            match h : Γ.get? v.val with
+            | some ty' => do
+              match hty : ty' with
+              | .llvm _ =>
+                throw <| .generic s!"INTERNAL ERROR: This case is impossible, RISCV expression is pointing to LLVM variable."
+              | .riscv originalRISCVTy =>
+                if hty' : originalRISCVTy = t then
+                  return ⟨v.val, by rw [h, hty']⟩
+                else
+                  throw <|.generic s!"INTERNAL ERROR: This case is impossible, RISCV expression is pointing to an incorrect bitwidth LLVM argument."
+                  -- return ⟨v.val, by rw [h]⟩
+            | none =>
+              -- this is impossible, because ctxtTransformToLLVM is a `List.map`, which always maintains length.
+              -- sorry
+              throw <| .generic s!"INTERNAL ERROR: This case is impossible, as 'ctxtTransformToLLVM' is length-preserving."
+        return Expr.mk
+          (op := Op.riscv op1)
+          (eff_le := eff_le1)
+          (ty_eq := ty_eq1 ▸ rfl) -- @bollu: Discussion with Alex needed about cute-ism.
+          (args := args')-- .cons e₁ <| .cons e₂ .nil)
+          (regArgs := HVector.nil)
+        -- LLVMPlusRiscV Γ eff (.llvm ty)
+
 -- def transformExprLLVMCasesArgs  (e : Expr (InstCombine.MetaLLVM 0) (ctxtTransformToLLVM Γ) eff ty) :=
 --   match e with
 --   | Expr.mk op1 ty_eq1 eff_le1 args regArgs1 =>
@@ -251,33 +288,264 @@ def rem {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
 #check Expr.mk
 #check Ctxt.Var
 
--- def transformExprRiscV (e : Expr (InstCombine.MetaLLVM 0) (ctxtTransformToLLVM Γ) eff ty) :  Expr LLVMPlusRiscV Γ eff (LLVMRiscV.Ty.llvm ty)  :=
---   sorry
+instance : MLIR.AST.TransformTy (LLVMPlusRiscV) 0 where
+  mkTy tStx := do
+    try
+      let llvmParse ← InstcombineTransformDialect.mkTy tStx
+      return .llvm llvmParse
+    catch _llvmErr =>
+      try
+        let riscvParse ← RiscvMkExpr.mkTy tStx
+        return .riscv riscvParse
+      catch _riscvErr =>
+        throw <| .generic s!"unable to parse type as either LLVM type or RISCV type."
+
+-- TO DO: discuss with Sid and Alex
+def mkExpr1 (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
+  MLIR.AST.ReaderM (LLVMPlusRiscV) (Σ eff ty, Expr (LLVMPlusRiscV) Γ eff ty) := do
+  if (opStx.name = "builtin.unrealized_conversion_cast.riscvToLLVM" ) || (opStx.name =  "builtin.unrealized_conversion_cast.LLVMToriscv" )  then
+    match opStx.args with
+    | v₁Stx :: [] =>
+      let ⟨ty₁, v₁⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₁Stx
+      match ty₁, opStx.name with
+      | .riscv (.bv) , "builtin.unrealized_conversion_cast.riscvToLLVM"=>
+              return ⟨ .pure,  .llvm (.bitvec 64) ,⟨ .builtin.unrealized_conversion_cast.riscvToLLVM , by rfl, by constructor,
+               .cons v₁ <| .nil,
+                .nil⟩⟩
+      | .llvm (.bitvec 64) , "builtin.unrealized_conversion_cast.LLVMToriscv"=>
+              return ⟨ .pure, .riscv (.bv) ,⟨ .builtin.unrealized_conversion_cast.LLVMToriscv , by rfl, by constructor,
+               .cons v₁ <| .nil,
+                .nil⟩⟩
+      | _ , _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
+    | _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
+
+
+
+
+-- to do: ask alex or sid if they agree on catching all errors or only unsupported op
+  else
+    let llvmParse := InstcombineTransformDialect.mkExpr (ctxtTransformToLLVM  Γ) opStx (← read) -- reading state out of the monad.
+    match llvmParse with
+      | .ok ⟨eff, ty, expr⟩ => do -- returns llvm expression
+        let v ← transformExprLLVM expr
+        return ⟨eff, .llvm ty, v⟩
+      | .error  (_) => do --- unsure here if that makes sense to try to parse as riscv given all errors -> ask Alex and Sid
+        let ⟨eff, (ty) , expr⟩ ← RiscvMkExpr.mkExpr (ctxtTransformToRiscV Γ) opStx (← read)
+        let v ← transformExprRISCV expr
+        return ⟨eff, .riscv ty , v⟩
+    /- | .error  (MLIR.AST.TransformError.unsupportedOp _) => do
+        let ⟨eff, (ty) , expr⟩ ← RiscvMkExpr.mkExpr (ctxtTransformToRiscV Γ) opStx (← read)
+        let v ← transformExprRISCV expr
+        return ⟨eff, .riscv ty , v⟩-/
+      -- | _ => throw <| .generic s!"Ill-formed program, coulnd't parse it as llvm nor riscv."
+
+
 
 def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
   MLIR.AST.ReaderM (LLVMPlusRiscV) (Σ eff ty, Expr (LLVMPlusRiscV) Γ eff ty) := do
-
   let llvmParse := InstcombineTransformDialect.mkExpr (ctxtTransformToLLVM  Γ) opStx (← read) -- reading state out of the monad.
   match llvmParse with
     | .ok ⟨eff, ty, expr⟩ => do -- returns llvm expression
       let v ← transformExprLLVM expr
       return ⟨eff, .llvm ty, v⟩
-
-      -- return ⟨eff, (.llvm ty),  .llvm expr⟩
-      -- llvmParse
-       -- transform the expression back
     | .error (.unsupportedOp _) => do
-     let ⟨eff, (ty) , expr⟩ ← RiscvMkExpr.mkExpr (ctxtTransformToRiscV Γ) opStx (← read)
-      --let ⟨eff, ty, expr⟩ ← ...
-      -- parse it as riscv
-     -- transform the expression back into my context
-      return _
-    | .error e => throw <| .generic s!"Ill-formed program, coulnd't parse it as llvm nor riscv."
+      let ⟨eff, (ty) , expr⟩ ← RiscvMkExpr.mkExpr (ctxtTransformToRiscV Γ) opStx (← read)
+      let v ← transformExprRISCV expr
+      return ⟨eff, .riscv ty , v⟩
+    | _ => throw <| .generic s!"Ill-formed program, coulnd't parse it as llvm nor riscv."
 
 
 
-instance : MLIR.AST.TransformExpr (LLVMPlusRiscV) 0 where
-  mkExpr := mkExpr
+
+instance : MLIR.AST.TransformExpr (LLVMPlusRiscV ) 0   where
+  mkExpr := mkExpr1
+
+
+
+
+
+/-
+def Var (Γ : Ctxt Ty) (t : Ty) : Type :=
+  { i : Nat // Γ.get? i = some t }
+-/
+
+-- TO DO: finish this proof, not to hard but will take some time + talk with Sid and Alex if this makes sense
+def transformVarLLVM (v :  Ctxt.Var (ctxtTransformToLLVM Γ) ty) :   Ctxt.Var Γ (LLVMRiscV.Ty.llvm ty) :=
+  match v with
+  | ⟨h, ty⟩ =>  ⟨h, by sorry ⟩
+
+def transformVarRISCV (v :  Ctxt.Var (ctxtTransformToRiscV Γ) ty) :   Ctxt.Var Γ (LLVMRiscV.Ty.riscv ty) :=
+  match v with
+  | ⟨h, ty⟩ =>  ⟨h, sorry ⟩
+
+
+
+
+def mkReturn (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) : MLIR.AST.ReaderM (LLVMPlusRiscV)
+    (Σ eff ty, Com LLVMPlusRiscV Γ eff ty) := do
+    let llvmParseReturn := InstcombineTransformDialect.mkReturn (ctxtTransformToLLVM  Γ) opStx (← read)
+    match llvmParseReturn with
+    | .ok ⟨eff, ty, Com.ret v⟩ => do  -- should have this time
+     -- let v' ←  v
+      return ⟨eff, .llvm ty, Com.ret (transformVarLLVM v) ⟩
+    | _ =>
+      let ⟨eff, ty , com⟩ ← RiscvMkExpr.mkReturn  (ctxtTransformToRiscV Γ) opStx (← read)
+      match com with
+      |Com.ret v => do
+        return ⟨eff, .riscv ty, Com.ret (transformVarRISCV v) ⟩
+      |_ => throw <| .generic s!"unable to parse return as either LLVM type or RISCV type."
+
+
+instance : MLIR.AST.TransformReturn (LLVMPlusRiscV) 0 where
+  mkReturn := mkReturn
+   -- | _ => throw <| .generic s!"Ill-formed return, coulnd't parse it as llvm nor riscv."
+
+
+
+
+open Qq MLIR AST Lean Elab Term Meta in
+elab "[LV|" reg:mlir_region "]" : term => do
+  SSA.elabIntoCom reg q(LLVMPlusRiscV)
 
 end LLVMRiscV
 -- etc for the other instances, each time just pattern-matching on whether the op/ty came from LLVM or RiscV, and dispatching to the relevant instance
+open LLVMRiscV
+
+
+-- return parsing works for RISC-V
+def RISCVReturn := [LV|{
+  ^entry (%0 : !i64 ):
+  "ret" (%0) : ( !i64 ) -> ()
+}]
+#check RISCVReturn
+
+def LLVMReturn :=
+  [LV| {
+  ^bb0(%X : i64, %Y : i64) :
+   llvm.return %X : i64
+  }]
+#check LLVMReturn
+
+/- ## test add -/
+def llvm_add:=
+  [LV| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.add   %X, %Y : i64
+      llvm.return %v1 : i64
+  }]
+#check llvm_add
+
+
+def RISCV_add_pretty := [LV|{
+  ^entry (%0: !i64):
+    %1 =  add %0, %0 : !i64
+          ret %1 : !i64
+}]
+
+def RISCV_add_unpretty := [LV| {
+  ^entry (%0: !i64):
+    %1 = "add" (%0, %0) : (!i64, !i64) -> (!i64)
+         "ret" (%1) : (!i64) -> ()
+}]
+
+/- ## test cases with disjoint, nsw and exact flags -/
+
+
+
+/- ## larger test cases  -/
+
+  def llvm_const_add_neg_add:=
+      [LV|{
+      ^bb0(%X : i64):
+      %v1 = llvm.mlir.constant 123848392 : i64
+      %v2 = llvm.add %X, %v1 : i64
+      %v3 = llvm.mlir.constant 0 :  i64
+      %v4 = llvm.sub %v3, %X : i64
+      %v = llvm.add %v2, %v1 : i64
+      llvm.return %v : i64
+  }]
+  #check llvm_const_add_neg_add
+
+  def riscv_const_add_neg_add_pretty :=
+      [LV| {
+      ^bb0(%X : !i64):
+      %v1 = const (123848392) : !i64
+      %v2 = add %X, %v1 : !i64
+      %v3 = const (0) : !i64
+      %v4 = sub %v3, %X : !i64
+      %v = add %v2, %v1 : !i64
+      ret %v : !i64
+  }]
+#check riscv_const_add_neg_add_pretty
+
+  def riscv_const_add_neg_add_unpretty :=
+      [LV| {
+      ^bb0(%X : !i64):
+      %v1 = "const " () { val = 123848392 : !i64 } : (!i64, !i64) -> (!i64)
+      %v2 = "add" (%X, %v1) : (!i64, !i64) -> (!i64)
+      %v3 = ".const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+      %v4 = "sub" (%v3, %X) : (!i64, !i64) -> (!i64)
+      %v = "add" (%v2, %v1) : (!i64, !i64) -> (!i64)
+      "ret" (%v) : (!i64, !i64) -> ()
+  }]
+#check riscv_const_add_neg_add_unpretty
+
+/- ## test cases with conversion casts -/
+
+
+def unrealized_conversion_cast_testRiscvToLLVM2 :=
+  [LV| {
+    ^entry (%0: !i64 ):
+    %1 = "builtin.unrealized_conversion_cast.riscvToLLVM" (%0) : (!i64) -> (i64)
+    llvm.return %1 : i64
+  }]
+#check  unrealized_conversion_cast_testRiscvToLLVM
+
+/- ## test cases that should throw an error  -/
+def mixed_variable_testCase := [LV| {
+  ^entry (%0: !i64, %X: i64):
+    %1 = "add" (%X, %0) : (!i64, !i64) -> (!i64)
+    %v1 = llvm.add  %X, %0 : i64
+    "ret" (%1) : (!i64) -> ()
+}]
+
+def wrong_variable_testCase := [LV| {
+  ^entry (%0: !i64, %X: i64):
+    %1 = "add" (%0, %0) : (!i64, !i64) -> (!i64)
+    %v1 = llvm.add  %0, %0 : i64
+    "ret" (%1) : (!i64) -> ()
+}]
+
+/- # AND -/
+def and_llvm : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
+    ^entry (%lhs: i64, %rhs: i64 ):
+      %1 = llvm.and %lhs, %rhs : i64
+      llvm.return %1 : i64
+  }]
+def and_riscv := [LV| {
+    ^entry (%lhs: i64, %rhs: i64 ):
+      %lhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%lhs) : (i64) -> !i64
+      %rhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%rhs) : (i64) -> !i64
+      %add1 = and %lhsr, %rhsr : !i64
+      %addl = "builtin.unrealized_conversion_cast.riscvToLLVM" (%add1) : (!i64) -> (i64)
+      llvm.return %addl : i64
+  }]
+
+structure RiscVPeepholeRewriteRefine2 (Γ : Ctxt Ty) where
+  lhs : Com LLVMPlusRiscV Γ .pure (Ty.llvm (.bitvec 64))
+  rhs : Com LLVMPlusRiscV Γ .pure (Ty.llvm (.bitvec 64))
+  correct : ∀ V, BitVec.Refinement (lhs.denote V : Option _) (rhs.denote V : Option _)
+
+open llvm.riscv
+open riscv.semantics
+open LLVM -- overthink this
+-- to do --> manage the proofs bc givenn new parsing harder 
+def llvm_and_lower_riscv2 : RiscVPeepholeRewriteRefine2 [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
+  {lhs:= and_llvm , rhs:= and_riscv ,
+   correct := by
+    unfold and_llvm and_riscv
+    simp_peephole
+    simp [riscv.semantics.builtin.unrealized_conversion_cast.riscvToLLVM,  riscv.semantics.builtin.unrealized_conversion_cast.LLVMToriscv, RTYPE_pure64_RISCV_SUB]
+    simp [LLVM.and, RTYPE_pure64_RISCV_AND]
+    rintro (_|_) (_|_) <;> simp [and?]; bv_decide
+  }
