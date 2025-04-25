@@ -257,7 +257,7 @@ def transformExprRISCV (e : Expr (RISCV64.RV64) ( ctxtTransformToRiscV Γ) eff t
         return Expr.mk
           (op := Op.riscv op1)
           (eff_le := eff_le1)
-          (ty_eq := ty_eq1 ▸ rfl) -- @bollu: Discussion with Alex needed about cute-ism.
+          (ty_eq := ty_eq1 ▸ rfl)
           (args := args')-- .cons e₁ <| .cons e₂ .nil)
           (regArgs := HVector.nil)
         -- LLVMPlusRiscV Γ eff (.llvm ty)
@@ -318,10 +318,6 @@ def mkExpr1 (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
                 .nil⟩⟩
       | _ , _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
     | _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
-
-
-
-
 -- to do: ask alex or sid if they agree on catching all errors or only unsupported op
   else
     let llvmParse := InstcombineTransformDialect.mkExpr (ctxtTransformToLLVM  Γ) opStx (← read) -- reading state out of the monad.
@@ -385,14 +381,13 @@ def mkReturn (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) : MLIR.AST.ReaderM (LLVMPlusR
     (Σ eff ty, Com LLVMPlusRiscV Γ eff ty) := do
     let llvmParseReturn := InstcombineTransformDialect.mkReturn (ctxtTransformToLLVM  Γ) opStx (← read)
     match llvmParseReturn with
-    | .ok ⟨eff, ty, Com.ret v⟩ => do  -- should have this time
-     -- let v' ←  v
+    | .ok ⟨eff, ty, Com.ret v⟩ =>
       return ⟨eff, .llvm ty, Com.ret (transformVarLLVM v) ⟩
     | _ =>
       let ⟨eff, ty , com⟩ ← RiscvMkExpr.mkReturn  (ctxtTransformToRiscV Γ) opStx (← read)
       match com with
-      |Com.ret v => do
-        return ⟨eff, .riscv ty, Com.ret (transformVarRISCV v) ⟩
+      |Com.ret v =>
+        return ⟨eff, .riscv ty, Com.ret (transformVarRISCV v) ⟩ -- need to transform variable from riscv
       |_ => throw <| .generic s!"unable to parse return as either LLVM type or RISCV type."
 
 
@@ -449,9 +444,26 @@ def RISCV_add_unpretty := [LV| {
 }]
 
 /- ## test cases with disjoint, nsw and exact flags -/
+-- to d0
+
+def or_disjoint_flag_test := [LV| {
+  ^entry (%0: i64):
+    %1 = llvm.or disjoint %0, %0 :  i64
+    "llvm.return" (%1) : (i64) -> ()
+}]
 
 
+def add_flag_test_both := [LV| {
+  ^entry (%0: i64):
+    %1 = llvm.add %0, %0 overflow<nsw, nuw> : i64
+    "llvm.return" (%1) : (i64) -> ()
+}]
 
+def add_flag_test := [LV| {
+  ^entry (%0: i64):
+    %1 = llvm.add %0, %0 overflow<nsw> : i64
+    "llvm.return" (%1) : (i64) -> ()
+}]
 /- ## larger test cases  -/
 
   def llvm_const_add_neg_add:=
@@ -479,11 +491,11 @@ def RISCV_add_unpretty := [LV| {
 #check riscv_const_add_neg_add_pretty
 
   def riscv_const_add_neg_add_unpretty :=
-      [LV| {
+  [LV| {
       ^bb0(%X : !i64):
-      %v1 = "const " () { val = 123848392 : !i64 } : (!i64, !i64) -> (!i64)
+      %v1 = "const" () { val = 123848392 : !i64 } : (!i64, !i64) -> (!i64)
       %v2 = "add" (%X, %v1) : (!i64, !i64) -> (!i64)
-      %v3 = ".const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+      %v3 = "const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
       %v4 = "sub" (%v3, %X) : (!i64, !i64) -> (!i64)
       %v = "add" (%v2, %v1) : (!i64, !i64) -> (!i64)
       "ret" (%v) : (!i64, !i64) -> ()
@@ -539,7 +551,7 @@ structure RiscVPeepholeRewriteRefine2 (Γ : Ctxt Ty) where
 open llvm.riscv
 open riscv.semantics
 open LLVM -- overthink this
--- to do --> manage the proofs bc givenn new parsing harder 
+-- to do --> manage the proofs bc givenn new parsing harder
 def llvm_and_lower_riscv2 : RiscVPeepholeRewriteRefine2 [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
   {lhs:= and_llvm , rhs:= and_riscv ,
    correct := by
@@ -549,3 +561,16 @@ def llvm_and_lower_riscv2 : RiscVPeepholeRewriteRefine2 [Ty.llvm (.bitvec 64) , 
     simp [LLVM.and, RTYPE_pure64_RISCV_AND]
     rintro (_|_) (_|_) <;> simp [and?]; bv_decide
   }
+/-
+
+
+
+def ADD_LLVM_flags :=
+  [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+         %v1 = llvm.add %X, %Y overflow<nsw> : i64
+           llvm.return %v1 : i64
+  }].denote
+
+
+-/

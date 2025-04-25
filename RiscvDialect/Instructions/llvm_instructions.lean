@@ -14,20 +14,26 @@ import Lean
 def llvm_add :=
   [llvm(64)| {
 ^bb0(%X : i64, %Y : i64):
-      %v1 = llvm.add  %X, %Y : i64
+      %v1 = llvm.add   %X, %Y : i64
       llvm.return %v1 : i64
   }]
-
+#eval llvm_add
 def llvm_sub :=
     [llvm(64)| {
 ^bb0(%X : i64, %Y : i64):
       %v1 = llvm.sub  %X, %Y : i64
       llvm.return %v1 : i64
   }]
+def llvm_or :=
+  [llvm(64)| {
+^bb0(%X : i64, %Y : i64):
+      %v1 = llvm.or disjoint  %X, %Y : i64
+      llvm.return %v1 : i64
+  }]
+#eval llvm_or
 
 def llvm_ret:=
   [llvm(64)| {
     ^bb0(%X : i64):
     llvm.return %X : i64
   }]
-
