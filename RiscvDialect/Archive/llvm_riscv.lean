@@ -10,6 +10,7 @@ open LLVM
 /-!
 ## LLVM_RISCV hybrid dialect
 
+This file is the old version of the LLVM_RISCV dialect. The newer hybrid version of the dialect is the LLVMPlusRiscV dialect.
 This file modells a llvm/riscv hybrid dialect that supports `RISC-V` instructions of type
 `BitVec64` and `LLVM IR` operations of the `Option BitVec _`.
 
