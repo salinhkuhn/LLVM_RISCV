@@ -139,7 +139,6 @@ def llvmArgsFromHybrid_cons_eq.lemma {ty  : LLVM.Ty} {tys : List LLVM.Ty}
   (llvmArgsFromHybrid (tys := ty :: tys) (HVector.cons x xs)) =
   HVector.cons (f := TyDenote.toType) (a := ty) (as := tys) x (llvmArgsFromHybrid xs)
    := rfl
-    -- (HVector.cons (tys := ty :: tys) x xs):= by rfl
 
 
 open Lean Meta Elab in
@@ -149,19 +148,7 @@ def extractLLVMTy (x : Expr) : SimpM Expr := do
     | throwError m! "expected type of {x} to be `Ty.llvm _`, but got {x}"
   return xRealTy
 
-/-
-found (llvmArgsFromHybrid (HVector.cons (x✝
-  ↑(Ctxt.Var.last []
-      (Ty.llvm
-        (InstCombine.MTy.bitvec
-          64))) : InstCombine.MTy.bitvec
-  64) (x✝
-    (Ctxt.Var.last [Ty.llvm (InstCombine.MTy.bitvec 64)]
--/
-
-#check llvmArgsFromHybrid_cons_eq.lemma
 open Lean Meta Elab in
--- simproc [simp_denote] llvmArgsFromHybrid_cons_eq (llvmArgsFromHybrid (HVector.cons _ _)) := fun e => do
 simproc [simp_denote] llvmArgsFromHybrid_cons_eq (llvmArgsFromHybrid _) := fun e => do
   let_expr llvmArgsFromHybrid _ lhs := e
     | throwError m!"unable to find llvmArgsFromHybrid in {e}"
@@ -192,20 +179,58 @@ simproc [simp_denote] llvmArgsFromHybrid_cons_eq (llvmArgsFromHybrid _) := fun e
     expr := rhs,
     proof? := .some proof
   }
-  -- let_expr ((Ctxt.Valuation.snoc _V x) (Ctxt.Var.last _ _)) := x
 
-def foo : Type :=  HVector (fun x => ⟦x⟧) [Ty.llvm (InstCombine.MTy.bitvec 64)]
-def bar : Type := HVector TyDenote.toType (List.map Ty.llvm [InstCombine.MTy.bitvec 64])
-theorem foo_eq_bar : foo = bar := rfl
-
-
-
--- def llvmArgsFromHybrid : {tys : List LLVM.Ty} → HVector TyDenote.toType (tys.map LLVMRiscV.Ty.llvm) → HVector TyDenote.toType tys
 @[simp_denote]
-def llvmArgsFromHybrid_get_zero_eq {ty  : LLVM.Ty} {tys : List LLVM.Ty}
-    (x : TyDenote.toType (LLVMRiscV.Ty.llvm ty))
-    (xs : HVector TyDenote.toType (tys.map LLVMRiscV.Ty.llvm)) :
-  (llvmArgsFromHybrid (tys := ty :: tys) (HVector.cons x xs)).get ⟨0, by simp⟩ = x := by rfl
+def riscvArgsFromHybrid_nil_eq :
+  (riscvArgsFromHybrid HVector.nil) = HVector.nil := rfl
+
+def riscvArgsFromHybrid_cons_eq.lemma {ty  : RISCV64.RV64.Ty} {tys : List RISCV64.RV64.Ty}
+    (x : TyDenote.toType (LLVMRiscV.Ty.riscv ty))
+    (xs : HVector TyDenote.toType (tys.map LLVMRiscV.Ty.riscv)) :
+  (riscvArgsFromHybrid (tys := ty :: tys) (HVector.cons x xs)) =
+  HVector.cons (f := TyDenote.toType) (a := ty) (as := tys) x (riscvArgsFromHybrid xs)
+   := rfl
+
+open Lean Meta Elab in
+/-- Extract out the raw LLVM type from the. -/
+def extractRiscvTy (x : Expr) : SimpM Expr := do
+  let_expr Ty.riscv xRealTy := (← reduce x)
+    | throwError m! "expected type of {x} to be `Ty.riscv _`, but got {x}"
+  return xRealTy
+
+
+open Lean Meta Elab in
+simproc [simp_denote] riscvArgsFromHybrid_cons_eq (riscvArgsFromHybrid _) := fun e => do
+  let_expr riscvArgsFromHybrid _ lhs := e
+    | throwError m!"unable to find riscvArgsFromHybrid in {e}"
+  let_expr HVector.cons _α _f as a x xs := lhs
+    | throwError m!"unable to find HVector.cons in {lhs}"
+  let xRealTy ← extractRiscvTy a
+  let some (_, xsRealTys) := Expr.listLit? (← reduce as)
+    | return .continue
+  let xsRealTys ←  xsRealTys.mapM extractRiscvTy
+
+  logInfo m!"found (llvmArgsFromHybrid (HVector.cons ({x} : {xRealTy}) ({xs} : {xsRealTys})"
+  let llvmTypeType := mkApp (mkConst ``Dialect.Ty []) (mkConst ``RISCV64.RV64 [])
+  let xsRealTys ← listExprToExprShallow (.some llvmTypeType) xsRealTys
+
+  logInfo m!"calling {``riscvArgsFromHybrid_cons_eq.lemma} with {xRealTy}, {xsRealTys}, {x}, {xs}"
+  logInfo m!"XXXX"
+  let proof := mkAppN (mkConst ``riscvArgsFromHybrid_cons_eq.lemma []) #[xRealTy, xsRealTys, x, xs]
+  logInfo m!"YYYY"
+  logInfo m!"built proof {proof}"
+  let proof ← reduce proof
+  logInfo m!"reduced proof to {proof}"
+  let eq ← reduce (← inferType proof)
+  logInfo m!"reduced type of proof (i.e. the equality) to {eq}"
+  let .some (_ty, _lhs, rhs) := eq.eq?
+    | throwError "unable to reduce application of riscvArgsFromHybrid_cons_eq.lemma to an equality, only reduced to '{eq}'."
+  logInfo m!"final right-hand-side of equality is: {rhs}"
+  return .visit {
+    expr := rhs,
+    proof? := .some proof
+  }
+
 
 def llvm_and_lower_riscv : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
   {lhs:= add_llvm_no_flags , rhs:= add_riscv ,
@@ -214,6 +239,7 @@ def llvm_and_lower_riscv : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.
     set_option pp.analyze true in
     simp_peephole
     intros a b
+    
     rw [llvmArgsFromHybrid_get_zero_eq]
     simp only [riscVArgsFromHybrid_nil_eq]
     simp only [liftM, monadLift, MonadLift.monadLift,
