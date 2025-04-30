@@ -23,7 +23,8 @@ And operations out of selected RISC-V extension:
     - `Zicond` : extension for conditional operations https://github.com/riscvarchive/riscv-zicond/blob/main/zicondops.adoc
 -/
 inductive Op -- ! whenever add an operation, extend the pretty EDSL accordingly !
-|   const : (val : Int) → Op -- const is not part of the RISC-V ISA but is used to in this dialect to modell immediates.
+| li : (val : Int) → Op
+| const : (val : Int) → Op -- const is not part of the RISC-V ISA but is used to in this dialect to modell immediates.
 -- `RV64I` base ISA instructions (integer add, subtract & logical operations)
 |  lui (imm : BitVec 20)
 |  auipc (imm : BitVec 20)
@@ -157,7 +158,8 @@ encounters a `sig` it can replace it by its definition.
 
 @[simp, reducible]
 def Op.sig : Op → List Ty
-  | .const _ =>  []
+  | .li _ => []
+  | .const _ =>  [] -- at some remove this competely because only want to have load immediate
   | .mulu  => [Ty.bv, Ty.bv]
   | .mulh  => [Ty.bv, Ty.bv]
   | .mulhu  => [Ty.bv, Ty.bv]
@@ -234,6 +236,7 @@ Again, we mark  it as `simp` and `reducible`.
 
 @[simp, reducible]
 def Op.outTy : Op  → Ty
+  |.li _ => Ty.bv
   |.const _ => Ty.bv
   |.mulu  => Ty.bv
   |.mulh  => Ty.bv
@@ -338,6 +341,7 @@ functions that define our semantics.
 @[simp, reducible]
 instance : DialectDenote (RV64) where
   denote
+  |.li imm, _ , _ =>  BitVec.ofInt 64 imm
   |.const val,_,  _  => BitVec.ofInt 64 val
   |.addiw imm, regs, _   => ADDIW_pure64 imm (regs.getN 0 (by simp [DialectSignature.sig, signature]))
   |.lui imm,  regs , _   => UTYPE_pure64_lui imm (regs.getN 0 (by simp [DialectSignature.sig, signature]))

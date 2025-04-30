@@ -24,10 +24,12 @@ open LLVMRiscV
 open LLVM
 open RV64Semantics
 
+
+-- not even true, will never get rid of this cast, especially the last line
 def cast_eliminiation_llvm : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64)] :=
   {lhs:=
     [LV| {
-      ^entry (%lhs: i64):
+      ^entry (%lhs: i64): -- this is a refinement
       %lhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%lhs) : (i64) -> !i64
       %addl = "builtin.unrealized_conversion_cast.riscvToLLVM" (%lhsr) : (!i64) -> (i64)
       llvm.return %addl : i64  }],
@@ -37,13 +39,12 @@ def cast_eliminiation_llvm : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64)] :=
       llvm.return %lhs : i64  }],
       correct := by
        simp_peephole
-       intro e
-       simp [transformVarLLVM]
-       simp [LLVMRiscV.builtin.unrealized_conversion_cast.LLVMToriscv, LLVMRiscV.builtin.unrealized_conversion_cast.riscvToLLVM]
-       sorry }
+       rintro (_|a) <;> sorry
+    }
 
-
-def cast_eliminiation_riscv : RiscVPeepholeRewriteRefine1 [Ty.riscv (.bv)] :=
+-- not sure if this will kick in because of the return and eliminate many rewrites 
+-- will run this in a loop to eliminate all the casts.
+def cast_eliminiation_riscv : RiscVPeepholeRewriteRefine [Ty.riscv (.bv)] :=
   {lhs:=
     [LV| {
       ^entry (%lhs: !i64):

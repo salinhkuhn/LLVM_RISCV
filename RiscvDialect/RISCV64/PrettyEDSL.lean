@@ -47,6 +47,7 @@ syntax "divu" : MLIR.Pretty.uniform_op
 syntax "remu" : MLIR.Pretty.uniform_op
 syntax "rem" : MLIR.Pretty.uniform_op
 syntax "const" : MLIR.Pretty.uniform_op
+syntax "li" : MLIR.Pretty.uniform_op
 syntax "ret" : MLIR.Pretty.uniform_op
 
 syntax "sext.b" : MLIR.Pretty.uniform_op
@@ -122,6 +123,14 @@ macro_rules
       `(mlir_op| $res:mlir_op_operand = "const"()
           {val = $x:num : $outer_type} : ($outer_type) -> ($outer_type) )
 
+syntax mlir_op_operand " = " "li" "(" num (" : " mlir_type)? ")"
+  (" : " mlir_type)? : mlir_op
+macro_rules
+  | `(mlir_op| $res:mlir_op_operand = li ($x)
+      $[: $outer_type]? ) => do
+      let outer_type ← outer_type.getDM `(mlir_type| _) -- extract the optional type- extract the optional type, else default to return type
+      `(mlir_op| $res:mlir_op_operand = "li"()
+          {imm = $x:num : $outer_type} : ($outer_type) -> ($outer_type) )
 
 /- take in one operand and one val attribute, immediate value -/
 declare_syntax_cat MLIR.One.Attr.One.Arg.Imm.op
@@ -178,6 +187,12 @@ private def test_andi := [RV64_com| {
 private def test_slli := [RV64_com| {
   ^bb0(%e1 : !i64, %e2 : !i64 ):
   %1 =  slli %e1, 42 : !i64
+        ret %1 : !i64
+}]
+
+private def test_li := [RV64_com| {
+  ^bb0(%e1 : !i64):
+  %1 =  li (42) : !i64
         ret %1 : !i64
 }]
 

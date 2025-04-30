@@ -23,7 +23,7 @@ inductive Op where
   | riscv : (Dialect.Op RISCV64.RV64) -> Op
   | builtin.unrealized_conversion_cast.riscvToLLVM : Op
   | builtin.unrealized_conversion_cast.LLVMToriscv : Op
-
+  deriving DecidableEq, Repr
 def builtin.unrealized_conversion_cast.riscvToLLVM (toCast : BitVec 64 ): Option (BitVec 64 ) := some toCast
 /--
 Casting a some x to x. The none (poison case) will be harded coded to zero bit vector as any

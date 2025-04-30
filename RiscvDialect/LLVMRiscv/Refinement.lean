@@ -12,7 +12,24 @@ structure LLVMPeepholeRewriteRefine (Γ : Ctxt Ty) where
   rhs : Com LLVMPlusRiscV Γ .pure (Ty.llvm (.bitvec 64))
   correct : ∀ V, BitVec.Refinement (lhs.denote V : Option _) (rhs.denote V : Option _)
 
-structure RiscVPeepholeRewriteRefine1 (Γ : Ctxt Ty) where
+structure RiscVPeepholeRewriteRefine (Γ : Ctxt Ty) where
   lhs : Com LLVMPlusRiscV Γ .pure (Ty.riscv (.bv))
   rhs : Com LLVMPlusRiscV Γ .pure (Ty.riscv (.bv))
   correct : ∀ V, BitVec.Refinement (lhs.denote V : Option _) (rhs.denote V : Option _)
+
+/--
+##  Wrapper for peephole rewriter
+-/
+def LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND (self : LLVMPeepholeRewriteRefine Γ) : PeepholeRewrite LLVMPlusRiscV Γ (Ty.llvm (.bitvec 64))  :=
+  {
+    lhs := self.lhs
+    rhs := self.rhs
+    correct := by sorry
+  }
+
+  def RiscVToLLVMPeepholeRewriteRefine.toPeepholeUNSOUND (self : RiscVPeepholeRewriteRefine Γ) : PeepholeRewrite LLVMPlusRiscV Γ (Ty.riscv (.bv)) :=
+  {
+    lhs := self.lhs
+    rhs := self.rhs
+    correct := by sorry
+  }

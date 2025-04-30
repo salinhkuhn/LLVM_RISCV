@@ -141,21 +141,40 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
   MLIR.AST.ReaderM (RV64) (Σ eff ty, Expr (RV64) Γ eff ty) := do
     match opStx.args with
     | []  => do
-        let some att := opStx.attrs.getAttr "val"
-          | throw <| .unsupportedOp s!"no attirbute in const {repr opStx}"
-        match att with
-          | .int val ty =>
-            let opTy@(.bv) ← mkTy ty -- ty.mkTy
-            return ⟨.pure, opTy, ⟨
-              .const (val),
-              by
-              simp[DialectSignature.outTy, signature]
-             ,
-              by constructor,
-              .nil,
-              .nil
-            ⟩⟩
-          | _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
+        match opStx.name with
+        | "const" => do
+            let some att := opStx.attrs.getAttr "val"
+              | throw <| .unsupportedOp s!"no attirbute in const {repr opStx}"
+            match att with
+              | .int val ty =>
+                let opTy@(.bv) ← mkTy ty -- ty.mkTy
+                return ⟨.pure, opTy, ⟨
+                  .const (val),
+                  by
+                  simp[DialectSignature.outTy, signature]
+                ,
+                  by constructor,
+                  .nil,
+                  .nil
+                ⟩⟩
+              | _ => throw <| .unsupportedOp s!"unsupported attribute in const while parsing {repr opStx}"
+        | "li" => do
+            let some att := opStx.attrs.getAttr "imm"
+              | throw <| .unsupportedOp s!"no attirbute in li, need to specify immediate {repr opStx}"
+            match att with
+              | .int val ty =>
+                let opTy@(.bv) ← mkTy ty -- ty.mkTy
+                return ⟨.pure, opTy, ⟨
+                  .li (val),
+                  by
+                  simp[DialectSignature.outTy, signature]
+                ,
+                  by constructor,
+                  .nil,
+                  .nil
+                ⟩⟩
+              | _ => throw <| .unsupportedOp s!"unsupported attribute in li while parsing {repr opStx}"
+        | _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
     | v₁Stx::[] =>
        let ⟨ty₁, v₁⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₁Stx
         match ty₁, opStx.name with
