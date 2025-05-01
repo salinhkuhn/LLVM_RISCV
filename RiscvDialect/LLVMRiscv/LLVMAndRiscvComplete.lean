@@ -460,7 +460,7 @@ def test_icmp_sge := [CV|
 #check test_icmp_sge
 
 
-def riscv_program_lowering1_lhs := [CV|
+def riscv_program_lowering1_lhs (w : Nat) := [CV|
 {
 ^bb0(%X : i4, %Y : i4, %Z : i4) :
   %r = llvm.add %X,%Y : i4
@@ -480,14 +480,14 @@ def riscv_program_lowering1_rhs := [CV|
 
 
 structure LLVMPeepholeRewriteRefine2 (Γ : Ctxt  LLVMRiscVComplete.Ty) where
-  lhs : Com  LLVMRiscVComplete.LLVMPlusRiscV Γ .pure ( LLVMRiscVComplete.Ty.llvm (.bitvec 32))
+  lhs : Com  LLVMRiscVComplete.LLVMPlusRiscV Γ .pure ( LLVMRiscVComplete.Ty.llvm (.bitvec w))
   rhs : Com  LLVMRiscVComplete.LLVMPlusRiscV Γ .pure ( LLVMRiscVComplete.Ty.llvm (.bitvec 64))
   correct : ∀ V, BitVec.Refinement (lhs.denote V : Option _) (rhs.denote V : Option _)
 
 -- NEED HELP IN IDENTIFYING THE W
 -- NEED to change the refinement statement of BitVec to they must be equal when we appply BitVec.setWidth 64 ()
 def llvm_add_lower_riscv : LLVMPeepholeRewriteRefine2 [LLVMRiscVComplete.Ty.llvm (.bitvec 4) , LLVMRiscVComplete.Ty.llvm (.bitvec 4),LLVMRiscVComplete.Ty.llvm (.bitvec 4)] :=
-  {lhs:= riscv_program_lowering1_lhs , rhs:= riscv_program_lowering1_rhs ,
+  {lhs := riscv_program_lowering1_lhs , rhs:= riscv_program_lowering1_rhs ,
    correct := by
     sorry
   }
@@ -721,7 +721,7 @@ theorem valuation_var_snoc_eq.lemma {Ty : Type} [TyDenote Ty] {Γ : Ctxt Ty} {t 
 
 
 /- # ADD, riscv   -/
-def add_riscv := [CV| { -- this isnt correct bc add could overflow and then riscv is anyways more precise 
+def add_riscv := [CV| { -- this isnt correct bc add could overflow and then riscv is anyways more precise
     ^entry (%lhs: i4, %rhs: i4 ):
       %lhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%lhs) : (i4) -> !i64
       %rhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%rhs) : (i4) -> !i64
@@ -764,3 +764,8 @@ def xor_riscv := [CV| {
     . simp [BitVec.Refinement , RTYPE_pure64_RISCV_XOR , builtin.unrealized_conversion_cast.riscvToLLVM, builtin.unrealized_conversion_cast.LLVMToriscv]
       bv_decide
   }
+  
+-- attempt to write in pure bitvecotr only
+theorem toBitVeconly (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
+BitVec.extractLsb 63 0 (BitVec.extractLsb' 0 128 (BitVec.ofInt 129 (rs1_val.toNat * rs2_val.toNat)))
+  = BitVec.setWidth 64 (BitVec.mul rs1_val rs2_val)  := by sorry -- to do

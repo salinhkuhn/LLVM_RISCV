@@ -86,8 +86,8 @@ theorem execute_ADDIW_pure64_BitVec (imm : BitVec 12) (rs1_val : BitVec 64) :
 
 -- changing the proofs such that rhs is directly the sail pure function without copying the bit vector directly
 theorem execute_UTYPE_pure64_lui (imm : BitVec 20) (pc : BitVec 64) : PureFunctions.execute_UTYPE_pure64 imm pc (uop.RISCV_LUI)
-    = RV64.UTYPE_pure64_lui imm pc:= by
-  unfold RV64.UTYPE_pure64_lui
+    = RV64Semantics.UTYPE_pure64_lui imm pc:= by
+  unfold RV64Semantics.UTYPE_pure64_lui
   unfold PureFunctions.execute_UTYPE_pure64
   simp only [Nat.reduceAdd, BitVec.ofNat_eq_ofNat]
   unfold sign_extend Sail.BitVec.signExtend BitVec.signExtend
@@ -96,8 +96,8 @@ theorem execute_UTYPE_pure64_lui (imm : BitVec 20) (pc : BitVec 64) : PureFuncti
 
 -- loads immediate into upper 20 bits and then fills the rest up with 0 and returns, adds the program counter and then returns it as a result
 theorem execute_UTYPE_pure64_AUIPC (imm : BitVec 20) (pc : BitVec 64)  : PureFunctions.execute_UTYPE_pure64 imm pc (uop.RISCV_AUIPC)
-    = RV64.UTYPE_pure64_AUIPC imm pc:= by
-  unfold RV64.UTYPE_pure64_AUIPC PureFunctions.execute_UTYPE_pure64
+    = RV64Semantics.UTYPE_pure64_AUIPC imm pc:= by
+  unfold RV64Semantics.UTYPE_pure64_AUIPC PureFunctions.execute_UTYPE_pure64
   simp only [Nat.reduceAdd, BitVec.ofNat_eq_ofNat, BitVec.add_eq, BitVec.add_left_inj]
   unfold sign_extend Sail.BitVec.signExtend BitVec.signExtend
   unfold HAppend.hAppend HPow.hPow instHPowInt_leanRV64DLEAN BitVec.instHAppendHAddNat
@@ -105,8 +105,8 @@ theorem execute_UTYPE_pure64_AUIPC (imm : BitVec 20) (pc : BitVec 64)  : PureFun
 
 -- shiftiwop semantics:
 theorem execute_SHIFTIWOP_pure64_RISCV_SLLIW (shamt : BitVec 5) (rs1_val : BitVec 64) :  PureFunctions.execute_SHIFTIWOP_pure64 shamt (sopw.RISCV_SLLIW) rs1_val
-    = RV64.SHIFTIWOP_pure64_RISCV_SLLIW shamt  rs1_val := by
-  unfold  RV64.SHIFTIWOP_pure64_RISCV_SLLIW PureFunctions.execute_SHIFTIWOP_pure64
+    = RV64Semantics.SHIFTIWOP_pure64_RISCV_SLLIW shamt  rs1_val := by
+  unfold  RV64Semantics.SHIFTIWOP_pure64_RISCV_SLLIW PureFunctions.execute_SHIFTIWOP_pure64
   simp only [BitVec.shiftLeft_eq]
   unfold sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb  BitVec.signExtend
   rw [BitVec.extractLsb]
@@ -127,48 +127,48 @@ theorem execute_SHIFTIWOP_pure64_RISCV_SRLIW (shamt : BitVec 5) (rs1_val : BitVe
 theorem execute_SHIFTIWOP_pure64_RISCV_SRAIW (shamt : BitVec 5) (rs1_val : BitVec 64) :
   PureFunctions.execute_SHIFTIWOP_pure64 shamt sopw.RISCV_SRAIW rs1_val
     =
-    RV64.SHIFTIWOP_pure64_RISCV_SRAIW shamt rs1_val := by rfl
+    RV64Semantics.SHIFTIWOP_pure64_RISCV_SRAIW shamt rs1_val := by rfl
 
 theorem execute_SHIFTIOP_pure64_RISCV_SLLI (shamt : BitVec 6) (rs1_val : BitVec 64)  : PureFunctions.execute_SHIFTIOP_pure64 shamt sop.RISCV_SLLI rs1_val
-    = RV64.SHIFTIOP_pure64_RISCV_SLLI shamt rs1_val:= by
-  unfold  RV64.SHIFTIOP_pure64_RISCV_SLLI PureFunctions.execute_SHIFTIOP_pure64
+    = RV64Semantics.SHIFTIOP_pure64_RISCV_SLLI shamt rs1_val:= by
+  unfold  RV64Semantics.SHIFTIOP_pure64_RISCV_SLLI PureFunctions.execute_SHIFTIOP_pure64
   simp
   unfold shift_bits_left HShiftLeft.hShiftLeft BitVec.instHShiftLeft BitVec.instHShiftLeftNat
   bv_decide
 
 theorem execute_SHIFTIOP_pure64_RISCV_SRLI (shamt : BitVec 6) (rs1_val : BitVec 64) : PureFunctions.execute_SHIFTIOP_pure64 shamt sop.RISCV_SRLI rs1_val
-    = RV64.SHIFTIOP_pure64_RISCV_SRLI shamt  rs1_val := by
-  unfold RV64.SHIFTIOP_pure64_RISCV_SRLI PureFunctions.execute_SHIFTIOP_pure64
+    = RV64Semantics.SHIFTIOP_pure64_RISCV_SRLI shamt  rs1_val := by
+  unfold RV64Semantics.SHIFTIOP_pure64_RISCV_SRLI PureFunctions.execute_SHIFTIOP_pure64
   simp
   unfold shift_bits_right HShiftRight.hShiftRight BitVec.instHShiftRight BitVec.instHShiftRightNat
   bv_decide
 
 theorem execute_SHIFTIOP_pure64_RISCV_SRAI (shamt : (BitVec 6)) (rs1_val : (BitVec 64)) : PureFunctions.execute_SHIFTIOP_pure64 shamt sop.RISCV_SRAI rs1_val =
-    RV64.SHIFTIOP_pure64_RISCV_SRAI shamt  rs1_val:=
+    RV64Semantics.SHIFTIOP_pure64_RISCV_SRAI shamt  rs1_val:=
   by
   rfl
 
 -- simple integer operations on 32-bit word and then sign extend result to 64 bits
 theorem execute_RTYPEW_pure64_RISCV_ADDW (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPEW_pure64 ropw.RISCV_ADDW rs2_val rs1_val =
-      RV64.RTYPEW_pure64_RISCV_ADDW rs2_val rs1_val := by
-  unfold RV64.RTYPEW_pure64_RISCV_ADDW PureFunctions.execute_RTYPEW_pure64
+      RV64Semantics.RTYPEW_pure64_RISCV_ADDW rs2_val rs1_val := by
+  unfold RV64Semantics.RTYPEW_pure64_RISCV_ADDW PureFunctions.execute_RTYPEW_pure64
   simp only [Nat.sub_zero, Nat.reduceAdd, BitVec.add_eq]
   unfold sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb HPow.hPow instHPowInt_leanRV64DLEAN
   bv_decide
 
 theorem execute_RTYPEW_pure64_RISCV_SUBW (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPEW_pure64 (ropw.RISCV_SUBW) (rs2_val) (rs1_val) =
-      RV64.RTYPEW_pure64_RISCV_SUBW rs2_val rs1_val := by
-    unfold  RV64.RTYPEW_pure64_RISCV_SUBW PureFunctions.execute_RTYPEW_pure64
+      RV64Semantics.RTYPEW_pure64_RISCV_SUBW rs2_val rs1_val := by
+    unfold  RV64Semantics.RTYPEW_pure64_RISCV_SUBW PureFunctions.execute_RTYPEW_pure64
     simp only [Nat.sub_zero, Nat.reduceAdd, BitVec.sub_eq]
     unfold sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb HPow.hPow instHPowInt_leanRV64DLEAN
     bv_decide
 
 -- can be all done by rfl
 theorem execute_RTYPEW_pure64_RISCV_SLLW (rs2_val : BitVec 64) (rs1_val : BitVec 64)  : PureFunctions.execute_RTYPEW_pure64 ropw.RISCV_SLLW rs2_val rs1_val =
-    RV64.RTYPEW_pure64_RISCV_SLLW rs2_val rs1_val := by
-  unfold RV64.RTYPEW_pure64_RISCV_SLLW PureFunctions.execute_RTYPEW_pure64
+    RV64Semantics.RTYPEW_pure64_RISCV_SLLW rs2_val rs1_val := by
+  unfold RV64Semantics.RTYPEW_pure64_RISCV_SLLW PureFunctions.execute_RTYPEW_pure64
   simp
   unfold sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb BitVec.signExtend
   unfold  shift_bits_left HPow.hPow HShiftLeft.hShiftLeft BitVec.instHShiftLeftNat instHPowInt_leanRV64DLEAN BitVec.instHShiftLeft
@@ -178,8 +178,8 @@ theorem execute_RTYPEW_pure64_RISCV_SLLW (rs2_val : BitVec 64) (rs1_val : BitVec
 
 -- can be all done by rfl
 theorem execute_RTYPEW_pure64_RISCV_SRLW (rs2_val : BitVec 64) (rs1_val : BitVec 64)  : PureFunctions.execute_RTYPEW_pure64 ropw.RISCV_SRLW rs2_val rs1_val
-    = RV64.RTYPEW_pure64_RISCV_SRLW rs2_val  rs1_val:= by
-  unfold RV64.RTYPEW_pure64_RISCV_SRLW PureFunctions.execute_RTYPEW_pure64
+    = RV64Semantics.RTYPEW_pure64_RISCV_SRLW rs2_val  rs1_val:= by
+  unfold RV64Semantics.RTYPEW_pure64_RISCV_SRLW PureFunctions.execute_RTYPEW_pure64
   simp
   unfold sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb BitVec.signExtend
   rw [BitVec.extractLsb]
@@ -206,56 +206,56 @@ theorem execute_RTYPEW_pure64_RISCV_SRAW (rs2_val : (BitVec 64)) (rs1_val : (Bit
 
 theorem execute_RTYPE_pure64_RISCV_ADD (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPE_pure64 rop.RISCV_ADD  rs2_val rs1_val
-      = RV64.RTYPE_pure64_RISCV_ADD rs2_val rs1_val:= by rfl
+      = RV64Semantics.RTYPE_pure64_RISCV_ADD rs2_val rs1_val:= by rfl
 
 theorem execute_RTYPE_pure64_RISCV_SLT (rs2_val : BitVec 64) (rs1_val : BitVec 64) : PureFunctions.execute_RTYPE_pure64 rop.RISCV_SLT rs2_val rs1_val
-  =  RV64.RTYPE_pure64_RISCV_SLT rs2_val rs1_val := by rfl
+  =  RV64Semantics.RTYPE_pure64_RISCV_SLT rs2_val rs1_val := by rfl
 
 theorem execute_RTYPE_pure64_RISCV_SLTU (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPE_pure64 rop.RISCV_SLTU rs2_val rs1_val
-    = RV64.RTYPE_pure64_RISCV_SLTU rs2_val rs1_val := by rfl
+    = RV64Semantics.RTYPE_pure64_RISCV_SLTU rs2_val rs1_val := by rfl
 
 theorem execute_RTYPE_pure64_RISCV_AND (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPE_pure64 rop.RISCV_AND rs2_val rs1_val
-      = RV64.RTYPE_pure64_RISCV_AND rs2_val rs1_val := by
-  unfold RV64.RTYPE_pure64_RISCV_AND PureFunctions.execute_RTYPE_pure64
+      = RV64Semantics.RTYPE_pure64_RISCV_AND rs2_val rs1_val := by
+  unfold RV64Semantics.RTYPE_pure64_RISCV_AND PureFunctions.execute_RTYPE_pure64
   bv_decide
 
 theorem execute_RTYPE_pure64_RISCV_OR(rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPE_pure64 rop.RISCV_OR  rs2_val rs1_val
-      = RV64.RTYPE_pure64_RISCV_OR rs2_val rs1_val:= by
-  unfold RV64.RTYPE_pure64_RISCV_OR PureFunctions.execute_RTYPE_pure64
+      = RV64Semantics.RTYPE_pure64_RISCV_OR rs2_val rs1_val:= by
+  unfold RV64Semantics.RTYPE_pure64_RISCV_OR PureFunctions.execute_RTYPE_pure64
   bv_decide
 
 theorem execute_RTYPE_pure64_RISCV_XOR(rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPE_pure64 rop.RISCV_XOR  rs2_val  rs1_val
-      = RV64.RTYPE_pure64_RISCV_XOR rs2_val rs1_val:= by
-  unfold RV64.RTYPE_pure64_RISCV_XOR PureFunctions.execute_RTYPE_pure64
+      = RV64Semantics.RTYPE_pure64_RISCV_XOR rs2_val rs1_val:= by
+  unfold RV64Semantics.RTYPE_pure64_RISCV_XOR PureFunctions.execute_RTYPE_pure64
   bv_decide
 
 theorem execute_RTYPE_pure64_RISCV_SLL (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
      PureFunctions.execute_RTYPE_pure64 rop.RISCV_SLL  rs2_val rs1_val =
-      RV64.RTYPE_pure64_RISCV_SLL rs2_val rs1_val:= by rfl
+      RV64Semantics.RTYPE_pure64_RISCV_SLL rs2_val rs1_val:= by rfl
 
 theorem execute_RTYPE_pure64_RISCV_SRL (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPE_pure64 rop.RISCV_SRL rs2_val rs1_val
-      = RV64.RTYPE_pure64_RISCV_SRL rs2_val rs1_val:= by rfl
+      = RV64Semantics.RTYPE_pure64_RISCV_SRL rs2_val rs1_val:= by rfl
 
 theorem execute_RTYPE_pure64_RISCV_SUB (rs2_val : BitVec 64) (rs1_val : BitVec 64) : PureFunctions.execute_RTYPE_pure64 rop.RISCV_SUB  rs2_val rs1_val
-    = RV64.RTYPE_pure64_RISCV_SUB rs2_val rs1_val:= by
-  unfold RV64.RTYPE_pure64_RISCV_SUB PureFunctions.execute_RTYPE_pure64
+    = RV64Semantics.RTYPE_pure64_RISCV_SUB rs2_val rs1_val:= by
+  unfold RV64Semantics.RTYPE_pure64_RISCV_SUB PureFunctions.execute_RTYPE_pure64
   bv_decide
 
 theorem execute_RTYPE_pure64_RISCV_SRA (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_RTYPE_pure64 rop.RISCV_SRA rs2_val rs1_val
-      = RV64.RTYPE_pure64_RISCV_SRA rs2_val rs1_val := by
-      unfold RV64.RTYPE_pure64_RISCV_SRA
+      = RV64Semantics.RTYPE_pure64_RISCV_SRA rs2_val rs1_val := by
+      unfold RV64Semantics.RTYPE_pure64_RISCV_SRA
       rfl
 
 theorem execute_REMW_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_REMW_pure64 False rs2_val rs1_val
-    = RV64.REMW_pure64_unsigned rs2_val rs1_val  := by
-  unfold RV64.REMW_pure64_unsigned execute_REMW_pure64 sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int
+    = RV64Semantics.REMW_pure64_unsigned rs2_val rs1_val  := by
+  unfold RV64Semantics.REMW_pure64_unsigned execute_REMW_pure64 sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int
   simp only [sail_hPow_eq, Int.reduceToNat, Int.reducePow, Int.reduceMul, Nat.reduceAdd,
     decide_false, Bool.false_eq_true, ↓reduceIte, Nat.sub_zero, BitVec.extractLsb_toNat,
     Nat.shiftRight_zero, Nat.reducePow, Int.ofNat_emod, Nat.cast_ofNat, beq_iff_eq, Int.ofNat_toNat,
@@ -265,8 +265,8 @@ theorem execute_REMW_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64)
 
 theorem execute_REMW_pure64_signed :
     PureFunctions.execute_REMW_pure64 (True) (rs2_val : (BitVec 64)) (rs1_val : (BitVec 64)) =
-     RV64.REMW_pure64_signed (rs2_val) (rs1_val) := by
-  unfold RV64.REMW_pure64_signed execute_REMW_pure64
+     RV64Semantics.REMW_pure64_signed (rs2_val) (rs1_val) := by
+  unfold RV64Semantics.REMW_pure64_signed execute_REMW_pure64
   simp
   unfold sign_extend Sail.BitVec.signExtend Sail.BitVec.extractLsb to_bits get_slice_int
   rw [← Int.ofNat_eq_coe]
@@ -275,9 +275,9 @@ theorem execute_REMW_pure64_signed :
 --tmod was hard
 theorem execute_REM_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64) :
     PureFunctions.execute_REM_pure64 (False) rs2_val rs1_val =
-    RV64.REM_pure64_unsigned rs2_val rs1_val
+    RV64Semantics.REM_pure64_unsigned rs2_val rs1_val
   := by
-  unfold RV64.REM_pure64_unsigned execute_REM_pure64
+  unfold RV64Semantics.REM_pure64_unsigned execute_REM_pure64
   simp only [decide_false, Bool.false_eq_true, ↓reduceIte, beq_iff_eq, Int.ofNat_eq_coe,
     Int.ofNat_toNat]
   unfold  to_bits get_slice_int
@@ -487,14 +487,14 @@ theorem execute_ITYPE_pure64_RISCV_XORI imm (rs1_val : (BitVec 64))  :
     PureFunctions.execute_ITYPE_pure64 imm rs1_val (iop.RISCV_XORI)
       = RV64.ITYPE_pure64_RISCV_XORI imm rs1_val
   := by
-  unfold  RV64.ITYPE_pure64_RISCV_XORI PureFunctions.execute_ITYPE_pure64
+  unfold  RV64Semantics.ITYPE_pure64_RISCV_XORI PureFunctions.execute_ITYPE_pure64
   simp
   unfold sign_extend Sail.BitVec.signExtend
   bv_decide
 
 theorem execute_ZICOND_RTYPE_pure64_RISCV_CZERO_EQZ (rs2_val : (BitVec 64)) (rs1_val : (BitVec 64)) :
     execute_ZICOND_RTYPE_pure64 rs2_val  rs1_val zicondop.RISCV_CZERO_EQZ
-      = RV64.ZICOND_RTYPE_pure64_RISCV_CZERO_EQZ rs2_val  rs1_val
+      = RV64Semantics.ZICOND_RTYPE_pure64_RISCV_CZERO_EQZ rs2_val  rs1_val
   := by
   unfold execute_ZICOND_RTYPE_pure64
   simp
@@ -503,7 +503,7 @@ theorem execute_ZICOND_RTYPE_pure64_RISCV_CZERO_EQZ (rs2_val : (BitVec 64)) (rs1
 
 theorem execute_ZICOND_RTYPE_pure64_RISCV_RISCV_CZERO_NEZ (rs2_val : (BitVec 64)) (rs1_val : (BitVec 64)) :
     execute_ZICOND_RTYPE_pure64 rs2_val  rs1_val zicondop.RISCV_CZERO_NEZ
-      = RV64.ZICOND_RTYPE_pure64_RISCV_RISCV_CZERO_NEZ rs2_val  rs1_val
+      = RV64Semantics.ZICOND_RTYPE_pure64_RISCV_RISCV_CZERO_NEZ rs2_val  rs1_val
   := by
   unfold execute_ZICOND_RTYPE_pure64
   simp

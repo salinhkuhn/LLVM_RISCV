@@ -3,7 +3,7 @@ import LeanRV64DLEAN.Sail.BitVec
 import LeanRV64DLEAN.Defs
 import LeanRV64DLEAN.Specialization
 import LeanRV64DLEAN.RiscvExtras
-import RiscvDialect.ProofsPureBaseISA
+--import RiscvDialect.ProofsPureBaseISA
 -- added the imports bellow, had to move pure_func to the library folder
 import LeanRV64DLEAN
 import LeanRV64DLEAN.pure_func
@@ -70,7 +70,7 @@ theorem add_eq (imm : BitVec 12) (rs1 : regidx) (rd : regidx) :
 theorem utype_eq_LUI (imm : (BitVec 20)) (rd : regidx):
     Functions.execute_UTYPE imm rd (uop.RISCV_LUI)
     =
-    skeleton_UTYPE_LUI imm rd (fun imm1 pc => RV64.UTYPE_pure64_lui imm1 pc)
+    skeleton_UTYPE_LUI imm rd (fun imm1 pc => RV64Semantics.UTYPE_pure64_lui imm1 pc)
   := by
   unfold Functions.execute_UTYPE skeleton_UTYPE_LUI --execute_UTYPE_pure64
   simp only [Nat.reduceAdd, BitVec.ofNat_eq_ofNat, bind_pure_comp, pure_bind]
