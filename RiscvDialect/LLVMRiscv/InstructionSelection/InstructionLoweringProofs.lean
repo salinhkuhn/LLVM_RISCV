@@ -236,181 +236,6 @@ theorem valuation_var_snoc_eq.lemma {Ty : Type} [TyDenote Ty] {Γ : Ctxt Ty} {t 
   (s.snoc x) (Ctxt.Var.toSnoc v) = s v := rfl
 
 
-/- # ADD, riscv   -/
-def add_riscv := [LV| {
-    ^entry (%lhs: i64, %rhs: i64 ):
-      %lhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%lhs) : (i64) -> !i64
-      %rhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%rhs) : (i64) -> !i64
-      %add1 = add %lhsr, %rhsr : !i64
-      %addl = "builtin.unrealized_conversion_cast.riscvToLLVM" (%add1) : (!i64) -> (i64)
-      llvm.return %addl : i64
-  }]
-/- # ADD, no flag  -/
-
-def add_llvm_no_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%lhs: i64, %rhs: i64 ):
-      %1 = llvm.add   %lhs, %rhs  : i64
-      llvm.return %1 : i64
-  }]
-
-/- # ADD,with  flag  -/
-def add_llvm_nsw_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%lhs: i64, %rhs: i64 ):
-      %1 = llvm.add   %lhs, %rhs overflow<nsw>   : i64
-      llvm.return %1 : i64
-  }]
-def add_llvm_nuw_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%lhs: i64, %rhs: i64 ):
-      %1 = llvm.add   %lhs, %rhs overflow<nuw>   : i64
-      llvm.return %1 : i64
-  }]
-
-def add_llvm_nsw_nuw_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%lhs: i64, %rhs: i64 ):
-      %1 = llvm.add   %lhs, %rhs overflow<nsw,nuw>   : i64
-      llvm.return %1 : i64
-  }]
-/- example of very manula proof ->try to extract patterns for automation-/
-def llvm_add_lower_riscv_noflags : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
-  {lhs:= add_llvm_no_flags , rhs:= add_riscv ,
-   correct := by
-    unfold add_llvm_no_flags add_riscv
-    set_option pp.analyze true in
-    simp_peephole
-    simp [builtin.unrealized_conversion_cast.riscvToLLVM,  builtin.unrealized_conversion_cast.LLVMToriscv, RTYPE_pure64_RISCV_AND]
-    -- intros a b
-    simp [LLVM.add, RTYPE_pure64_RISCV_ADD]
-    rintro (_|_) (_|_)
-    . simp
-    . simp
-    . simp
-    . simp [LLVM.add?, BitVec.Refinement.refl]
-
-
-  }
-
-def llvm_add_lower_riscv_nsw_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
-  {lhs:= add_llvm_nsw_flags , rhs:= add_riscv ,
-   correct := by
-    unfold add_llvm_nsw_flags add_riscv
-    set_option pp.analyze true in
-    simp_peephole
-    simp [builtin.unrealized_conversion_cast.riscvToLLVM,  builtin.unrealized_conversion_cast.LLVMToriscv, RTYPE_pure64_RISCV_AND]
-    -- intros a b
-    simp [LLVM.add, RTYPE_pure64_RISCV_ADD]
-    rintro (_|_) (_|_) ;
-    . simp
-    . simp
-    . simp
-    . simp
-      split /- split on the overflow case: if overflow then riscv refines
-      llvm by providing a default value, else they return the same value -/
-      case some.some.isTrue => simp [BitVec.Refinement.none_left] -- case where llvm is poison and riscv defaults to a value
-      case some.some.isFalse => simp [LLVM.add?]
-  }
-def llvm_add_lower_riscv_nuw_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
-  {lhs:= add_llvm_nuw_flags , rhs:= add_riscv ,
-   correct := by
-    unfold add_llvm_nuw_flags add_riscv
-    set_option pp.analyze true in
-    simp_peephole
-    simp [builtin.unrealized_conversion_cast.riscvToLLVM,  builtin.unrealized_conversion_cast.LLVMToriscv, RTYPE_pure64_RISCV_AND]
-    -- intros a b
-    simp [LLVM.add, RTYPE_pure64_RISCV_ADD]
-    rintro (_|_) (_|_) ;
-    . simp
-    . simp
-    . simp
-    . simp
-      split /- split on the overflow case: if overflow then riscv refines
-      llvm by providing a default value, else they return the same value -/
-      case some.some.isTrue => simp [BitVec.Refinement.none_left] -- case where llvm is poison and riscv defaults to a value
-      case some.some.isFalse => simp [LLVM.add?]
-  }
-
-def llvm_add_lower_riscv_nuw_nsw_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
-  {lhs:= add_llvm_nuw_flags , rhs:= add_riscv ,
-   correct := by
-    unfold add_llvm_nuw_flags add_riscv
-    set_option pp.analyze true in
-    simp_peephole
-    simp [builtin.unrealized_conversion_cast.riscvToLLVM,  builtin.unrealized_conversion_cast.LLVMToriscv, RTYPE_pure64_RISCV_AND]
-    -- intros a b
-    simp [LLVM.add, RTYPE_pure64_RISCV_ADD]
-    rintro (_|_) (_|_) ;
-    . simp
-    . simp
-    . simp
-    . simp
-      split /- split on the overflow case: if overflow then riscv refines
-      llvm by providing a default value, else they return the same value -/
-      case some.some.isTrue => simp [BitVec.Refinement.none_left] -- case where llvm is poison and riscv defaults to a value
-      case some.some.isFalse => simp [LLVM.add?]
-  }
-
-/- # AND -/
-def and_llvm : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%lhs: i64, %rhs: i64 ):
-      %1 = llvm.and %lhs, %rhs : i64
-      llvm.return %1 : i64
-      --llvm.return %lhs : i64
-  }]
-
-def and_riscv := [LV| {
-    ^entry (%lhs: i64, %rhs: i64 ):
-      %lhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%lhs) : (i64) -> !i64
-      %rhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%rhs) : (i64) -> !i64
-       %add1 = and %lhsr, %rhsr : !i64
-       %addl = "builtin.unrealized_conversion_cast.riscvToLLVM" (%add1) : (!i64) -> (i64)
-      llvm.return %addl : i64
-  }]
-
-
-def llvm_and_lower_riscv1 : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
-  {lhs:= and_llvm , rhs:= and_riscv ,
-   correct := by
-    unfold and_llvm and_riscv
-    simp_peephole
-    simp [builtin.unrealized_conversion_cast.riscvToLLVM,  builtin.unrealized_conversion_cast.LLVMToriscv]
-    simp [LLVM.and, RTYPE_pure64_RISCV_AND]
-    rintro (_|foo) (_|bar)
-    · simp
-    · simp
-    · simp
-    · simp
-      simp only [LLVM.and?, BitVec.Refinement.some_some]
-      bv_decide
-    }
-
-
-def and_riscv_bv_test := [LV| {
-    ^entry (%lhs: i64, %rhs: i64 ):
-      %lhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%lhs) : (i64) -> !i64
-      %rhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%rhs) : (i64) -> !i64
-       %add1 =and %lhsr, %lhsr : !i64
-      %add2 = and %rhsr, %add1 : !i64
-      %add3 = and %rhsr , %add2: !i64
-       %addl = "builtin.unrealized_conversion_cast.riscvToLLVM" (%add3) : (!i64) -> (i64)
-      llvm.return %addl : i64
-  }]
-
-
-def llvm_and_lower_riscv_test : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
-  {lhs:= and_llvm , rhs:= and_riscv_bv_test ,
-   correct := by
-    unfold and_llvm and_riscv_bv_test
-    simp_peephole
-    simp [builtin.unrealized_conversion_cast.riscvToLLVM,  builtin.unrealized_conversion_cast.LLVMToriscv]
-    simp [LLVM.and, RTYPE_pure64_RISCV_AND]
-    rintro (_|foo) (_|bar)
-    · simp
-    · simp
-    · simp
-    · simp
-      simp only [LLVM.and?, BitVec.Refinement.some_some]
-      bv_decide
-    }
-
 /- # ASHR, not exact -/
 
 def ashr_llvm_no_flag : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
@@ -455,8 +280,6 @@ def llvm_ashr_lower_riscv_no_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 
                   simp[Nat.mod_eq_of_lt h]
                 -- to do : get rid of the to Nat aka do it bitwise
                 sorry
-
-
   }
 
 def llvm_ashr_lower_riscv_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
@@ -475,6 +298,7 @@ def llvm_ashr_lower_riscv_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64)
                 --simp [BitVec.Refinement.some_some]
                 have not_leq_eq_mod  (x2 : BitVec 64) (h :x2.toNat < 64 ):  x2.toNat = x2.toNat % 64 := by
                   simp[Nat.mod_eq_of_lt h]
+
                 -- to do : get rid of the to Nat aka do it bitwise
                 sorry
 
@@ -500,7 +324,7 @@ def srl_riscv := [LV| {
       llvm.return %y : i64
   }]
 
-
+#check BitVec.ushiftRight
 /-!
 
 Remove bitvec lemmas from the simp-set that simplify bitvector operations into toNat operations.
@@ -509,6 +333,7 @@ the `toNat` simpset.
 -/
 attribute [-simp] BitVec.ushiftRight_eq' BitVec.shiftLeft_eq' BitVec.sshiftRight_eq'
 
+-- unsure if this will be a problem for bv_decide
 def llvm_srl_lower_riscv1 : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
   {lhs := lshr_llvm_no_flag , rhs := srl_riscv ,
     correct :=  by
@@ -519,37 +344,30 @@ def llvm_srl_lower_riscv1 : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty
       ·  simp
       ·  simp
       ·  simp
-      · simp
+      · simp only [ne_eq, Option.bind_eq_bind, Option.some_bind, Nat.sub_zero, Nat.reduceAdd,
+        Option.getD_some]
         split
-        ·  simp
-        ·
-
-
-
-
-
-
-
-
-
-
-
+        · simp
         . simp [LLVM.lshr?]
           split
           .case some.some.isFalse.isTrue ht =>  simp [BitVec.Refinement]
             -- riscv returns the logical shift by the amount
-          . case some.some.isFalse.isFalse hf => -- to do: avoid to Nat but have bit vecotrs pure
+          . case some.some.isFalse.isFalse hf =>
             simp only [BitVec.Refinement.some_some]
+            bv_decide
+        /- aka the manual work before bv decide
             have not_leq_eq_mod  (x2 : BitVec 64) (h :x2.toNat < 64 ):  x2.toNat = x2.toNat % 64 := by
               simp only [Nat.mod_eq_of_lt h]
-            rw[← not_leq_eq_mod]
             have h2 :  ¬64#64 ≤ x2 = (x2 < 64#64):= by simp
-            rw [h2] at hf
-            have : x2 < 64#64 →  x2.toNat < 64 := by bv_omega
-            apply this
-            exact hf }
-
-  }
+            simp only [BitVec.ushiftRight_eq']
+            suffices x2.toNat = (BitVec.extractLsb 5 0 x2).toNat by
+              rw[this]
+            -- first the original goal then the assumption
+            simp
+            rw [Nat.mod_eq_of_lt]
+            bv_omega
+          -/
+    }
 
 
 def lshr_llvm_exact : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
@@ -564,96 +382,28 @@ def llvm_srl_lower_riscv_exact : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64)
       unfold lshr_llvm_exact srl_riscv
       simp_peephole
       simp [builtin.unrealized_conversion_cast.riscvToLLVM,builtin.unrealized_conversion_cast.LLVMToriscv ]
-      rintro (_|x1) (_|x2) <;> simp [RTYPE_pure64_RISCV_SRL,LLVM.lshr];
+      rintro (_|x1) (_|x2) <;> simp [RTYPE_pure64_RISCV_SRL_bv,LLVM.lshr];
       . split
         . simp [BitVec.Refinement.none_left] -- this is the poison case, where llvm returns a poison value but in riscv we ouptut a concret bitvec value for it,
           -- in detail riscv performs the arithemtic shift with the maximum possible shift amount
         . simp [LLVM.lshr?]
           split
-          .case some.some.isFalse.isTrue ht =>  simp [BitVec.Refinement]
+          .case some.some.isFalse.isTrue ht =>
             -- riscv returns the logical shift by the amount
+            simp [BitVec.Refinement]
           . case some.some.isFalse.isFalse hf =>
             simp only [BitVec.Refinement.some_some]
-            have not_leq_eq_mod  (x2 : BitVec 64) (h :x2.toNat < 64 ):  x2.toNat = x2.toNat % 64 := by
-              simp only [Nat.mod_eq_of_lt h]
-            rw[← not_leq_eq_mod]
-            have h2 :  ¬64#64 ≤ x2 = (x2 < 64#64):= by simp
-            rw [h2] at hf
-            have : x2 < 64#64 →  x2.toNat < 64 := by bv_omega
-            apply this
-            exact hf }
+            bv_decide
+            /-
+            manually work before bv_decide
+            simp at hf
+            simp [BitVec.ushiftRight_eq']
+            suffices x2.toNat = (x2.toNat % 64) by
+              rw [← this]
+            bv_omega
+             -/
+           }
 
-/- # MUL NO FLAG
-
-tail	__muldi3
-
-logical right shift operation
-in LLVM: if exact flag is set, then returns poison if any non zero bit is shifted  -/
-
-/-
-done in LLVM like this :
-%1 = llvm.mul %x, %amount : i64 -- value depends on wether to no overflow flag is present or not
--/
-def mul_llvm_noflag : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%x: i64, %amount: i64 ):
-      %1 = llvm.mul %x, %amount : i64 -- value depends on wether to no overflow flag is present or not
-      llvm.return %1 : i64
-  }]
-
-def mul_riscv := [LV| {
-    ^entry (%r1: i64, %r2: i64 ):
-      %x1 = "builtin.unrealized_conversion_cast.LLVMToriscv"(%r1) : (i64) -> !i64
-      %x2 = "builtin.unrealized_conversion_cast.LLVMToriscv"(%r2) : (i64) -> !i64
-      %res = mul %x1, %x2 : !i64
-      %y= "builtin.unrealized_conversion_cast.riscvToLLVM" (%res) : (!i64) -> (i64)
-      llvm.return %y : i64
-  }]
-
-/- # MUL FLAGS -/
-
-def mul_llvm_nsw : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%x: i64, %amount: i64 ):
-      %1 = llvm.mul %x, %amount overflow<nsw> : i64 -- value depends on wether to no overflow flag is present or not
-      llvm.return %1 : i64
-  }]
-
-def mul_llvm_nuw : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%x: i64, %amount: i64 ):
-      %1 = llvm.mul %x, %amount overflow<nuw> : i64 -- value depends on wether to no overflow flag is present or not
-      llvm.return %1 : i64
-  }]
-
-def mul_llvm_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%x: i64, %amount: i64 ):
-      %1 = llvm.mul %x, %amount overflow<nsw,nuw> : i64 -- value depends on wether to no overflow flag is present or not
-      llvm.return %1 : i64
-  }]
-
-/-
-## Missing BitVec Lemmas.
-Missing bit vector lemmas.
-Are not proven yet.
--/
--- to do + evtl. mark them as simp
-theorem extractLsb'_extractLsb' :
-    BitVec.extractLsb' start length (BitVec.extractLsb' start' length' x)
-    = (BitVec.extractLsb' (start'+start) (min length length') x).setWidth length := by
-
-  sorry
-
--- to do + evtl. mark them as simp
-theorem extractLsb'_extractLsb'2 {x : BitVec w} :
-    BitVec.extractLsb' start length (BitVec.extractLsb' start' length' x)
-    = BitVec.extractLsb' (start'+start) length (x.setWidth (start + start' + (min length length'))) := by
-  -- obtain rfl : w = 16 := sorry
-  -- bv_decide
-  --unfold BitVec.extractLsb'
-  --simp
-  sorry
-
-example {x1 x2 : BitVec 64 } : BitVec.setWidth 64 (BitVec.ofInt 129 (max (x1.toInt * x2.toInt) 0)) =
-(if 0#64 > (BitVec.mul x1 x2) then 0#64 else (BitVec.mul x1 x2)) := by sorry
-  -- bitwise reasoning needed -> ask for adivce
 
 open BitVec(ofInt)
 namespace BitVec
@@ -677,70 +427,7 @@ theorem Int.toNat_mod_eq {z : Int} (h : 0 ≤ z) (m : Nat) :
       -- ^^ TODO: we probably shouldn't use a Grind lemma here
 end BitVec
 
-def llvm_mul_lower_riscv_noflag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
-  {lhs := mul_llvm_noflag , rhs := mul_riscv ,
-    correct :=  by
-      unfold mul_llvm_noflag mul_riscv
-      simp_peephole
-      simp [builtin.unrealized_conversion_cast.riscvToLLVM,builtin.unrealized_conversion_cast.LLVMToriscv ]
-      rintro (_|x1) (_|x2) <;> simp ;
-      . simp [LLVM.mul]
-      . simp [LLVM.mul]
-      . simp [LLVM.mul]
-      . unfold LLVM.mul
-        simp [Option.bind_eq_bind, Option.some_bind]  -- not sure if this is correctly parsed because shouldnt default flag be set to false then
-        -- in this case of mul we do not care about overflow
-        simp only [LLVM.mul?, MUL_pure64_ftt]
-        simp [BitVec.extractLsb]
-        simp [extractLsb'_extractLsb'2]
-        have : 0 + min 64 128 = 64 := by omega
-        rw [this]
-        rw [ BitVec.extractLsb'_eq_self] -- wait until the SailLeanModell is updated to fix the semantics bug
-        bv_omega
-        sorry
 
-
-         }
-        -- to do : bitwise reasoning
-        /-
-        x1 * x2 =
-        BitVec.extractLsb 63 0
-        (BitVec.extractLsb' 0 128
-        (BitVec.ofInt 129 (max (x1.toInt * x2.toInt) 0)))
-        -- to do reason on a bit level -> MODULO 64 is equal to just extracting bit 63:0
-        -/
-      --simp [LLVM.lshr] -/
-
-
-/- # MUL with  FLAG -/
-/-
-
-pseudo ops
-tail	__muldi3
-
--/
-def mul_llvm_flag : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
-    ^entry (%x: i64, %amount: i64 ):
-      %1 = llvm.mul  %x, %amount : i64 -- value depends on wether to no overflow flag is present or not
-      llvm.return %1 : i64
-  }]
-
-
-def llvm_mul_lower_riscv1_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
-  {lhs := mul_llvm_flag , rhs := mul_riscv ,
-    correct :=  by
-      unfold mul_llvm_flag mul_riscv
-      simp_peephole
-      rintro (_|a) (_|b)<;> simp [LLVM.mul, LLVM.mul?, builtin.unrealized_conversion_cast.riscvToLLVM, builtin.unrealized_conversion_cast.LLVMToriscv ]
-      . unfold MUL_pure64_ftt
-        rw [ BitVec.extractLsb]
-        rw [ extractLsb'_extractLsb'2]
-        simp
-        have : min 64 128 = 64 := by omega
-        rw [this]
-        simp
-        sorry
-       }
 
 
 /- # OR non-disjoint  -/
@@ -867,7 +554,7 @@ def sdiv_riscv: Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pur
     ^entry (%x: i64, %y: i64 ):
       %x1 = "builtin.unrealized_conversion_cast.LLVMToriscv"(%x) : (i64) -> !i64
       %x2 = "builtin.unrealized_conversion_cast.LLVMToriscv"(%y) : (i64) -> !i64
-      --%1 = div  %x1, %x2 : !i64 -- value depends on wether to no overflow flag is present or not
+      %1 = div  %x1, %x2 : !i64 -- value depends on wether to no overflow flag is present or not
       %2 = "builtin.unrealized_conversion_cast.riscvToLLVM" (%1) : (!i64) -> (i64)
       llvm.return %2 : i64
   }]
@@ -935,6 +622,7 @@ def llvm_udiv_lower_riscv_no_flag: LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 6
         split
         . case some.some.h_1 ht =>
             simp
+            sorry
         . case some.some.h_2 htt =>
           split
           · case isTrue htrue  => sorry
@@ -1016,17 +704,13 @@ def llvm_shl_lower_riscv_nsw: LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , 
           split
           . case some.some.isTrue.isTrue ht =>  simp [BitVec.Refinement]
           . case some.some.isTrue.isFalse htf =>
-              simp[RTYPE_pure64_RISCV_SLL]
-              have {b : BitVec 64} (h : 64#64 >b) : b.toNat  = (b.toNat % 64) := by bv_omega
-              simp at htf
-              apply this at htf
-              rw [← htf]
+            simp only [RTYPE_pure64_RISCV_SLL_bv]
+            simp [BitVec.Refinement.bothSome]
+            bv_decide
           . simp [BitVec.Refinement]
          }
 
 -- to do rest of the flags if needed
-
-
 /-! # SUB, no flags   -/
 
 def llvm_sub: Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
@@ -1282,10 +966,6 @@ def riscv_icmp_ugt: Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] 
 ## Testing the application of cast "folding" pass/rewrites.
 actually applying the rewrites
 -/
-
-
-
-
 
 /- this steps lowers a llvm xor instruction into a riscv xor instruction including conversion casts-/
 def xor_cast_eq_xor_elim_rewrite :

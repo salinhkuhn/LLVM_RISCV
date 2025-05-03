@@ -18,6 +18,10 @@ inductive Ty where
   | riscv : (Dialect.Ty RISCV64.RV64) -> Ty
   deriving DecidableEq, Repr
 
+
+
+
+
 inductive Op where
   | llvm : (Dialect.Op LLVM) -> Op
   | riscv : (Dialect.Op RISCV64.RV64) -> Op
@@ -51,6 +55,13 @@ instance : TyDenote (Dialect.Ty LLVMPlusRiscV) where
   toType := fun
     | .llvm llvmTy => TyDenote.toType llvmTy
     | .riscv riscvTy => TyDenote.toType riscvTy
+
+/-
+instance (ty : Ty) : Inhabited (TyDenote.toType ty) where
+  default := match ty with
+    | .llvm llvmTy => default
+    | .riscv riscvTy => default
+-/
 
 @[simp]
 instance LLVMPlusRiscVSignature : DialectSignature LLVMPlusRiscV where

@@ -119,19 +119,29 @@ syntax mlir_op_operand " = " "const" "(" num (" : " mlir_type)? ")"
 macro_rules
   | `(mlir_op| $res:mlir_op_operand = const ($x)
       $[: $outer_type]? ) => do
+      -- let hardcodedTy ← `(mlir_type| !i64)
       let outer_type ← outer_type.getDM `(mlir_type| _) -- extract the optional type- extract the optional type, else default to return type
       `(mlir_op| $res:mlir_op_operand = "const"()
-          {val = $x:num : $outer_type} : ($outer_type) -> ($outer_type) )
+          {val = $x:num :  $outer_type} : ( $outer_type) -> ( $outer_type) )
 
-syntax mlir_op_operand " = " "li" "(" num (" : " mlir_type)? ")"
-  (" : " mlir_type)? : mlir_op
+
+syntax mlir_op_operand " = " "li" "(" num (" : " mlir_type)? ")" (" : " mlir_type)?
+  : mlir_op
+macro_rules
+  | `(mlir_op| $res:mlir_op_operand = li ($x)
+     $[: $outer_type]?  ) => do
+      let outer_type ← outer_type.getDM `(mlir_type| _ ) -- extract the optional type- extract the optional type, else default to return type
+      `(mlir_op| $res:mlir_op_operand = "li"()
+          {imm = $x:num : i64 } : ($outer_type) -> ($outer_type))
+
+/- -- version where outer type was  needed
 macro_rules
   | `(mlir_op| $res:mlir_op_operand = li ($x)
       $[: $outer_type]? ) => do
       let outer_type ← outer_type.getDM `(mlir_type| _) -- extract the optional type- extract the optional type, else default to return type
       `(mlir_op| $res:mlir_op_operand = "li"()
           {imm = $x:num : $outer_type} : ($outer_type) -> ($outer_type) )
-
+-/
 /- take in one operand and one val attribute, immediate value -/
 declare_syntax_cat MLIR.One.Attr.One.Arg.Imm.op
 /- to do --> add the other operations , DOESNT ACCEPT NEGATIV imm YET -/
@@ -149,13 +159,13 @@ syntax  "andi": MLIR.One.Attr.One.Arg.Imm.op
 syntax "ori" : MLIR.One.Attr.One.Arg.Imm.op
 syntax "xori" : MLIR.One.Attr.One.Arg.Imm.op
 
-syntax mlir_op_operand  " = " MLIR.One.Attr.One.Arg.Imm.op mlir_op_operand "," num ":" mlir_type : mlir_op
+syntax mlir_op_operand  " = " MLIR.One.Attr.One.Arg.Imm.op mlir_op_operand "," num (":" mlir_type)? : mlir_op
 
 macro_rules
 | `(mlir_op| $res:mlir_op_operand = $op1:MLIR.One.Attr.One.Arg.Imm.op $reg1 , $x : $t)  => do
     let some opName := MLIR.EDSL.Pretty.extractOpName op1.raw
       | Macro.throwUnsupported
-    `(mlir_op| $res:mlir_op_operand = $opName ($reg1) {imm = $x:num : $t}  : ($t) -> ($t) )
+    `(mlir_op| $res:mlir_op_operand = $opName ($reg1) {imm = $x:num : $t }  : ($t) -> ($t) )
 
 
 declare_syntax_cat MLIR.One.Attr.One.Arg.Shamt.op
@@ -166,9 +176,9 @@ syntax "srliw" : MLIR.One.Attr.One.Arg.Shamt.op
 syntax "sraiw" : MLIR.One.Attr.One.Arg.Shamt.op
 syntax "srli" : MLIR.One.Attr.One.Arg.Shamt.op
 
-syntax mlir_op_operand  " = " MLIR.One.Attr.One.Arg.Shamt.op mlir_op_operand "," num ":" mlir_type : mlir_op
+syntax mlir_op_operand  " = " MLIR.One.Attr.One.Arg.Shamt.op mlir_op_operand "," num (":" mlir_type)? : mlir_op
 macro_rules
-| `(mlir_op| $res:mlir_op_operand = $op1:MLIR.One.Attr.One.Arg.Shamt.op $reg1 , $x : $t)  => do
+| `(mlir_op| $res:mlir_op_operand = $op1:MLIR.One.Attr.One.Arg.Shamt.op $reg1 , $x  : $t )  => do
     let some opName := MLIR.EDSL.Pretty.extractOpName op1.raw
       | Macro.throwUnsupported
     `(mlir_op| $res:mlir_op_operand = $opName ($reg1) {shamt= $x:num : $t}  : ($t) -> ($t) )
@@ -193,7 +203,8 @@ private def test_slli := [RV64_com| {
 private def test_li := [RV64_com| {
   ^bb0(%e1 : !i64):
   %1 =  li (42) : !i64
-        ret %1 : !i64
+  %2 =  li (42) : !i64
+  ret %1 : !i64
 }]
 
 private def big_test := [RV64_com| {
@@ -205,13 +216,13 @@ private def big_test := [RV64_com| {
   %5 =  add %4, %1 : !i64
   %7 =  const (2) : !i64
   %6 =  ror %5, %7 : !i64
-        ret %6 : !i64
+  ret %6 : !i64
 }]
 
 private theorem test_rewrite :
 [RV64_com| {
   ^bb0(%r1 : !i64, %r2 : !i64 ):
-  %1 =  const (0) : !i64
+  %1 =  const (0)
   %2 =  sub %r1,  %1 : !i64
         ret %2 : !i64
   }].denote =

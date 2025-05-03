@@ -65,6 +65,43 @@ theorem sshiftRight_eq_setWidth_extractLsb_signExtend {w : Nat} (n : Nat) (x : B
 
 -- TODO: @bollu says: complain to the sail→lean people to not create toNats, WTF.
 theorem sshiftRight_eq_sshiftRight_extractLsb {w : Nat}
+    {lw : Nat} {lwh : lw >0 } (x y : BitVec w)  (hlw : (BitVec.toNat y) < 2^lw )
+    : x.sshiftRight y.toNat = x.sshiftRight (y.extractLsb (lw - 1) 0).toNat := by
+      suffices y.toNat = (BitVec.extractLsb (lw - 1) 0 y).toNat by
+        rw [this]
+      simp
+      have h {x: Nat} {h : x > 0 } : (x - 1 + 1) = x := by omega
+      rw[h]
+      rw [Nat.mod_eq_of_lt]
+      · exact hlw
+      · exact lwh
+
+
+
+
+
+  /-
+  proof strategy:
+  - show that if y has any set bits in indices [w..lw], then x.sshiftRight y = 0.
+    (If y is >= w, then x.sshiftRight y = 0)
+  - Otherwise, we know that y has no set bits in the range [w..lw], and therefore, y.toNat = y[0:lw].toNat
+    Hence, the shift amounts have the same value.
+  -/
+
+
+theorem RTYPE_pure64_RISCV_SRA_eq_sshiftRight (x y : BitVec 64) :
+    RTYPE_pure64_RISCV_SRA y x = x.sshiftRight' y := by
+  rw [BitVec.sshiftRight']
+
+  rw [sshiftRight_eq_sshiftRight_extractLsb (lw := 6) (hlw := by )]
+  rw [RTYPE_pure64_RISCV_SRA]
+  rw [sshiftRight_eq_setWidth_extractLsb_signExtend]
+  rfl
+
+
+/-
+
+theorem sshiftRight_eq_sshiftRight_extractLsb {w : Nat}
     {lw : Nat} (hlw : 2^lw = w)
     (x y : BitVec w) : x.sshiftRight y.toNat = x.sshiftRight (y.extractLsb (lw - 1) 0).toNat := by
   /-
@@ -85,7 +122,7 @@ theorem RTYPE_pure64_RISCV_SRA_eq_sshiftRight (x y : BitVec 64) :
   rfl
 
 
-
+-/
 
 
 example (rs2_val : BitVec 64) (rs1_val : BitVec 64) :  BitVec.extractLsb' 0 64
