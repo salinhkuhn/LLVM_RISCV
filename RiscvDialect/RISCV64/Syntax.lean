@@ -11,13 +11,6 @@ are targeted during lowering so far. This helps in comparing output with expecte
 avoids writting huge `Expr`.
 
 -/
-def const {Γ : Ctxt _} (n : ℤ) : Expr RV64 Γ .pure .bv  :=
-  Expr.mk
-    (op := Op.const n)
-    (eff_le := by constructor)
-    (ty_eq := rfl)
-    (args := .nil)
-    (regArgs := HVector.nil)
 
 def add {Γ : Ctxt _} (e₁ e₂: Ctxt.Var Γ .bv) : Expr RV64 Γ .pure .bv  :=
   Expr.mk
@@ -142,22 +135,6 @@ def mkExpr (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
     match opStx.args with
     | []  => do
         match opStx.name with
-        | "const" => do
-            let some att := opStx.attrs.getAttr "val"
-              | throw <| .unsupportedOp s!"no attirbute in const {repr opStx}"
-            match att with
-              | .int val ty =>
-                let opTy@(.bv) ← mkTy ty -- ty.mkTy
-                return ⟨.pure, opTy, ⟨
-                  .const (val),
-                  by
-                  simp[DialectSignature.outTy, signature]
-                ,
-                  by constructor,
-                  .nil,
-                  .nil
-                ⟩⟩
-              | _ => throw <| .unsupportedOp s!"unsupported attribute in const while parsing {repr opStx}"
         | "li" => do
             let some att := opStx.attrs.getAttr "imm"
               | throw <| .unsupportedOp s!"no attirbute in li, need to specify immediate {repr opStx}"

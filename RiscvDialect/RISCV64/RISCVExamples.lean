@@ -530,16 +530,6 @@ def lh49 : HVector TyDenote.toType [RISCV64.Ty.bv] := .cons (BitVec.ofNat 64 0) 
 def test_seti : BitVec 64 := RISCVEg49.denote  (Ctxt.Valuation.ofHVector lh49)
 #eval test_seti
 
--- constant : used in rewrites to model constant aka known register input ?
-def RISCVEg50 := [RV64_com| {
-  ^entry (%0 : !i64 ):
-    %2 = "RV64.const" () { val = 250 : !i64 } : ( !i64) -> (!i64)
-    "ret" (%2) : ( !i64 ) -> ()
-}]
-def lh50 : HVector TyDenote.toType [RISCV64.Ty.bv] := .cons (BitVec.ofNat 64 1) .nil
-def test_const : BitVec 64 := RISCVEg50.denote  (Ctxt.Valuation.ofHVector lh50)
-#eval test_const
-
 def RISCVEg200 := [RV64_com| {
   ^entry (%0 : !i64, %1 : !i64 ):
     %2 = "const" () { val = 1 : !i64 } : ( !i64) -> (!i64)
@@ -607,3 +597,5 @@ def lh55 : HVector TyDenote.toType ([] : List RISCV64.Ty) := .nil
 def test_const1 : BitVec 64 := RISCVEg55.denote  (Ctxt.Valuation.ofHVector lh55)
 #eval test_const1
 #check TyDenote.toType
+
+

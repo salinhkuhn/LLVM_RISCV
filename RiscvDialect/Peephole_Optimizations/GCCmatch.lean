@@ -1,7 +1,112 @@
-import RiscvDialect.Peephole_Optimizations.RISCVRewrites
--- this file contains the rewrites employed in the GCC compiler, its called match.pd and contains several peephole optimizations employed in the GCC compiler.
--- the goal is to implement and verfiy all and especially integrate all of them into our instruction selection pipeline.
-open RISCV64
+import RiscvDialect.LLVMRiscv.LLVMAndRiscV
+import SSA.Projects.DCE.DCE
+import SSA.Projects.CSE.CSE
+import RiscvDialect.LLVMRiscv.forLeanMlir
+import RiscvDialect.LLVMRiscv.InstructionSelection.all
+
+open LLVMRiscV
+open RV64Semantics -- needed to use RISC-V semantics in simp tactic
+open InstCombine(LLVM)
+
+set_option maxRecDepth 10000000
+/--
+# Peephole Optimizations
+This file contains Peephole Rewrites insipred by the rewrites LLVM performs.
+This collection of rewrites will be used as patterns within the Risc-V peephole optimizartion pass.
+Additionally they are insipred by the LLVM rewrites. -/
+
+/-
+the peephole optimization wrapper defined in the lean-mlir project.
+  def RiscVToLLVMPeepholeRewriteRefine.toPeepholeUNSOUND (self : RiscVPeepholeRewriteRefine Γ) : PeepholeRewrite LLVMPlusRiscV Γ (Ty.riscv (.bv)) :=
+  {
+    lhs := self.lhs
+    rhs := self.rhs
+    correct := by sorry
+  }
+
+rewrite machinery:
+  def rewritePeephole_go_multi (fuel : ℕ) (prs : List (PeepholeRewrite d Γ t))
+    (ix : ℕ) (target : Com d Γ₂ eff t₂) : Com d Γ₂ eff t₂ :=
+  match fuel with
+  | 0 => target
+  | fuel' + 1 =>
+    let target' := prs.foldl (fun acc pr => rewritePeepholeAt pr ix acc) target
+    rewritePeephole_go_multi fuel' prs (ix + 1) target'
+-- we fold each rewriter over the target program thereforeI assume that fuel should be themaximum between the number of rewrites
+and the size of the program.
+
+def rewritePeephole_multi (fuel : ℕ)
+   (prs : List (PeepholeRewrite d Γ t)) (target : Com d Γ₂ eff t₂) : (Com d Γ₂ eff t₂) :=
+    rewritePeephole_go_multi fuel prs 0 target
+-/
+
+
+
+/- This section defines the fuel parameter for the rewriter.
+I defined it as the maximum between the avaiable rewrites and the program size.
+Hence the rewriter loops over the rewrites and at each program position tries to match the rewrite.-/
+
+/- to  do: buld this machinery into the rewriter directly.
+
+e.g
+def nr_of_rewrites := 10
+def fuel_def {d : Dialect} [DialectSignature d] {Γ : Ctxt d.Ty} {eff : EffectKind} {t : d.Ty} (p: Com d Γ eff t) : Nat := max (Com.size p) nr_of_rewrites
+
+def rewritePeephole_multi
+   (prs : List (PeepholeRewrite d Γ t)) (target : Com d Γ₂ eff t₂) : (Com d Γ₂ eff t₂) :=
+    rewritePeephole_go_multi (fuel_def target) prs 0 target
+-/
+
+def nr_of_rewrites := 10
+def fuel_def {d : Dialect} [DialectSignature d] {Γ : Ctxt d.Ty} {eff : EffectKind} {t : d.Ty} (p: Com d Γ eff t) : Nat := max (Com.size p) nr_of_rewrites
+
+-- to do: this example stack overflows when performing the lowering.
+def peep_00_r:=
+      [LV|{
+      ^bb0(%X : i64, %Y : i64 ):
+      %1 = llvm.add %X, %Y : i64
+      %2 = llvm.sub %X, %X : i64
+      %3 = llvm.add %1, %2 : i64
+      llvm.return %3 : i64
+  }]
+def peep_00_l:=
+      [LV|{
+      ^bb0(%X : i64, %Y : i64):
+      %1 = llvm.add %X, %Y : i64
+      %2 = llvm.add %1, %Y : i64
+      llvm.return %2 : i64
+  }]
+def peep0  : PeepholeRewrite LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] (.llvm (.bitvec 64)) :=
+  {lhs :=  peep_00_r , rhs := peep_00_l ,
+    correct :=  by
+     sorry
+  }
+
+def test_peep0 :  Com LLVMPlusRiscV (Ctxt.ofList [.llvm (.bitvec 64),.llvm (.bitvec 64)]) .pure (.llvm (.bitvec 64)) :=
+  rewritePeephole_multi LLVMPlusRiscV (15) (loweringPass) peep_00_r
+#eval! test_peep0
+
+
+def test_pep0_dce:= (DCE.dce' test_peep0)
+#eval! test_pep0_dce
+def test_pep0_dce_dce := (DCE.dce' test_pep0_dce.val)
+#eval! test_pep0_dce_dce
+
+
+#eval! peep_00_r
+
+-- owering to riscv 5, not yet peephole optimized
+def test_pep0_dce_dce3 := (DCE.dce' test_pep0_dce_dce.val)
+#eval!  test_pep0_dce_dce3
+
+-- first time running common subexpression elimination
+
+unsafe def test_pep0_cse := (CSE.cse' test_pep0_dce_dce3.val)
+#eval! test_pep0_cse
+
+
+
+
 /-
 optimization found in the gcc backend
 

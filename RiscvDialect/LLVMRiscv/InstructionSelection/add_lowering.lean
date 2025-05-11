@@ -1,6 +1,6 @@
 import RiscvDialect.LLVMRiscv.LLVMAndRiscV
 import RiscvDialect.LLVMRiscv.Refinement
-import RiscvDialect.LLVMRiscv.InstructionSelection.simp_llvmriscv
+import RiscvDialect.LLVMRiscv.Cast
 
 open LLVMRiscV
 open RV64Semantics -- needed to use RISC-V semantics in simp tactic
@@ -14,27 +14,27 @@ set_option Elab.async true
 /- # ADD, riscv   -/
 def add_riscv := [LV| {
     ^entry (%lhs: i64, %rhs: i64 ):
-      %lhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%lhs) : (i64) -> !i64
-      %rhsr = "builtin.unrealized_conversion_cast.LLVMToriscv"(%rhs) : (i64) -> !i64
+      %lhsr = "builtin.unrealized_conversion_cast"(%lhs) : (i64) -> !i64
+      %rhsr = "builtin.unrealized_conversion_cast"(%rhs) : (i64) -> !i64
       %add1 = add %lhsr, %rhsr : !i64
-      %addl = "builtin.unrealized_conversion_cast.riscvToLLVM" (%add1) : (!i64) -> (i64)
+      %addl = "builtin.unrealized_conversion_cast" (%add1) : (!i64) -> (i64)
       llvm.return %addl : i64
   }]
 
 /- # ADD, no flag  -/
-
 def add_llvm_no_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
     ^entry (%lhs: i64, %rhs: i64 ):
       %1 = llvm.add   %lhs, %rhs  : i64
       llvm.return %1 : i64
   }]
 
-/- # ADD,with  flag  -/
+/- # ADD, with flags  -/
 def add_llvm_nsw_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
     ^entry (%lhs: i64, %rhs: i64 ):
       %1 = llvm.add   %lhs, %rhs overflow<nsw>   : i64
       llvm.return %1 : i64
   }]
+
 def add_llvm_nuw_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
     ^entry (%lhs: i64, %rhs: i64 ):
       %1 = llvm.add   %lhs, %rhs overflow<nuw>   : i64
@@ -46,6 +46,8 @@ def add_llvm_nsw_nuw_flags : Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bit
       %1 = llvm.add   %lhs, %rhs overflow<nsw,nuw>   : i64
       llvm.return %1 : i64
   }]
+
+
 /- example of very manula proof ->try to extract patterns for automation-/
 def llvm_add_lower_riscv_noflags : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
   {lhs:= add_llvm_no_flags , rhs:= add_riscv ,
@@ -83,11 +85,11 @@ def llvm_add_lower_riscv_nsw_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 
       case some.some.isTrue => simp [BitVec.Refinement.none_left] -- case where llvm is poison and riscv defaults to a value
       case some.some.isFalse => simp [LLVM.add?]
   }
+
 def llvm_add_lower_riscv_nuw_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64) , Ty.llvm (.bitvec 64)] :=
   {lhs:= add_llvm_nuw_flags , rhs:= add_riscv ,
    correct := by
     unfold add_llvm_nuw_flags add_riscv
-    set_option pp.analyze true in
     simp_peephole
     simp [builtin.unrealized_conversion_cast.riscvToLLVM,  builtin.unrealized_conversion_cast.LLVMToriscv, RTYPE_pure64_RISCV_AND]
     -- intros a b
@@ -122,4 +124,3 @@ def llvm_add_lower_riscv_nuw_nsw_flag : LLVMPeepholeRewriteRefine [Ty.llvm (.bit
       case some.some.isTrue => simp [BitVec.Refinement.none_left] -- case where llvm is poison and riscv defaults to a value
       case some.some.isFalse => simp [LLVM.add?]
   }
-

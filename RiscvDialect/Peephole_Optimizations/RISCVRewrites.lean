@@ -56,7 +56,7 @@ theorem get_cons_1 {A : α → Type*} {a b: α} {as : List α}
   ((e::ₕ (f ::ₕ vec)) : HVector A (a :: b :: as)).get (1 : Fin (as.length + 2)) = f := by rfl -- extracting the i succ elem is like extracting the i elem from the remaining list
 
 
-def lhs_and0 : Com RV64 (Ctxt.ofList [.bv]) .pure .bv :=
+def lhs_and0 : Com RV64Ú:=
   [RV64_com| {
   ^entry (%0: !i64 ):
     %1 = "const" () { val = 0 : !i64  } : ( !i64 ) -> (!i64)

@@ -7,6 +7,7 @@ import SSA.Projects.InstCombine.ForStd
 import SSA.Projects.InstCombine.LLVM.Semantics
 import SSA.Projects.InstCombine.Tactic
 import RiscvDialect.RISCV64.all
+
 set_option pp.fieldNotation false
 open InstCombine(LLVM)
 namespace LLVMRiscV
@@ -99,7 +100,7 @@ def extractllvmArgs : LLVMRiscV.Op → LLVM.Op
 
 def extractriscvArgs : LLVMRiscV.Op → RISCV64.RV64.Op
   | .riscv riscvOp => riscvOp
-  | _ => .const 0 -- fallback case if function gets called on LLVM ops.
+  | _ => .li 0 -- fallback case if function gets called on LLVM ops.
 
 
 
@@ -319,20 +320,20 @@ instance : MLIR.AST.TransformTy (LLVMPlusRiscV) 0 where
 -- TO DO: discuss with Sid and Alex
 def mkExpr1 (Γ : Ctxt _) (opStx : MLIR.AST.Op 0) :
   MLIR.AST.ReaderM (LLVMPlusRiscV) (Σ eff ty, Expr (LLVMPlusRiscV) Γ eff ty) := do
-  if (opStx.name = "builtin.unrealized_conversion_cast.riscvToLLVM" ) || (opStx.name =  "builtin.unrealized_conversion_cast.LLVMToriscv" )  then
+  if (opStx.name = "builtin.unrealized_conversion_cast" ) then
     match opStx.args with
     | v₁Stx :: [] =>
       let ⟨ty₁, v₁⟩ ← MLIR.AST.TypedSSAVal.mkVal Γ v₁Stx
-      match ty₁, opStx.name with
-      | .riscv (.bv) , "builtin.unrealized_conversion_cast.riscvToLLVM"=>
+      match ty₁ with
+      | .riscv (.bv) =>
               return ⟨ .pure,  .llvm (.bitvec 64) ,⟨ .builtin.unrealized_conversion_cast.riscvToLLVM , by rfl, by constructor,
                .cons v₁ <| .nil,
                 .nil⟩⟩
-      | .llvm (.bitvec 64) , "builtin.unrealized_conversion_cast.LLVMToriscv"=>
+      | .llvm (.bitvec 64) =>
               return ⟨ .pure, .riscv (.bv) ,⟨ .builtin.unrealized_conversion_cast.LLVMToriscv , by rfl, by constructor,
                .cons v₁ <| .nil,
                 .nil⟩⟩
-      | _ , _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
+      | _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
     | _ => throw <| .unsupportedOp s!"unsupported operation {repr opStx}"
 -- to do: ask alex or sid if they agree on catching all errors or only unsupported op
   else

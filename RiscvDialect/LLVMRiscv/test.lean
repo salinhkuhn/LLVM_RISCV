@@ -80,9 +80,9 @@ def add_flag_test := [LV| {
   def riscv_const_add_neg_add_pretty :=
       [LV| {
       ^bb0(%X : !i64):
-      %v1 = const (123848392) : !i64
+      %v1 = li (123848392) : !i64
       %v2 = add %X, %v1 : !i64
-      %v3 = const (0) : !i64
+      %v3 = li (0) : !i64
       %v4 = sub %v3, %X : !i64
       %v = add %v2, %v1 : !i64
       ret %v : !i64
@@ -92,9 +92,9 @@ def add_flag_test := [LV| {
   def riscv_const_add_neg_add_unpretty :=
   [LV| {
       ^bb0(%X : !i64):
-      %v1 = "const" () { val = 123848392 : !i64 } : (!i64, !i64) -> (!i64)
+      %v1 = "li" () { imm = 123848392 : !i64 } : (!i64, !i64) -> (!i64)
       %v2 = "add" (%X, %v1) : (!i64, !i64) -> (!i64)
-      %v3 = "const " () { val = 0 : !i64 } : (!i64, !i64) -> (!i64)
+      %v3 = "li" () { imm = 0 : !i64 } : (!i64, !i64) -> (!i64)
       %v4 = "sub" (%v3, %X) : (!i64, !i64) -> (!i64)
       %v = "add" (%v2, %v1) : (!i64, !i64) -> (!i64)
       "ret" (%v) : (!i64, !i64) -> ()

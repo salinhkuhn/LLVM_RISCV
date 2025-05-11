@@ -111,14 +111,6 @@ def RTYPE_pure64_RISCV_OR(rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64
 def RTYPE_pure64_RISCV_XOR(rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
       BitVec.xor rs2_val rs1_val
 
-def RTYPE_pure64_RISCV_SLL_bv (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
-       let shamt := (BitVec.extractLsb 5 0 rs2_val);
-        rs1_val <<< shamt
-
-def RTYPE_pure64_RISCV_SRL_bv (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
-      let shamt := (BitVec.extractLsb 5 0 rs2_val)
-      rs1_val  >>> shamt
-
 def RTYPE_pure64_RISCV_SUB (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
     BitVec.sub rs1_val rs2_val
 
@@ -130,9 +122,6 @@ BitVec.setWidth 64
         (BitVec.extractLsb 5 0 rs2_val).toNat
         (BitVec.signExtend
           (64 + (BitVec.extractLsb 5 0 rs2_val).toNat) rs1_val))
-
-
-
 
 /-
 theorem sshiftRight_eq_setWidth_extractLsb_signExtend {w : Nat} (n : Nat) (x : BitVec w) :
@@ -164,11 +153,6 @@ theorem RTYPE_pure64_RISCV_SRA_eq_sshiftRight (x y : BitVec 64) :
   rw [RTYPE_pure64_RISCV_SRA]
   rw [sshiftRight_eq_setWidth_extractLsb_signExtend]
   rfl
-
-
-
-
-
 -/
 
 def REMW_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64): BitVec 64 :=
@@ -207,9 +191,6 @@ def MULW_pure64 (rs2_val : (BitVec 64)) (rs1_val : (BitVec 64)) : BitVec 64 :=
  the suffix indicates how the flags are assumed to be set.
 { high := _, signed_rs1:= _, signed_rs2 := _  }
 -/
-
-def  MUL_pure64_fff_bv (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=  rs2_val * rs1_val
-
 def  MUL_pure64_fft (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
   BitVec.extractLsb 63 0
     (BitVec.extractLsb' 0 128
@@ -233,8 +214,6 @@ def MUL_pure64_ttf (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
 def MUL_pure64_ftt (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
   BitVec.extractLsb 63 0 (BitVec.extractLsb' 0 128 (BitVec.ofInt 129 (rs1_val.toInt * rs2_val.toInt)))
 
-def MUL_pure64_ftt_bv  (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
-  rs1_val * rs2_val
 
 def MUL_pure64_ttt (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
   BitVec.extractLsb 127 64 (BitVec.extractLsb' 0 128 (BitVec.ofInt 129 (rs1_val.toInt * rs2_val.toInt)))
@@ -268,13 +247,6 @@ def DIV_pure64_signed (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
         -9223372036854775808
       else if rs2_val.toInt = 0 then -1 else rs1_val.toInt.tdiv rs2_val.toInt))
 
-def DIV_pure64_signed_bv (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
-  if rs2_val = 0#64 then
-    -1#64
-  else
-    rs1_val.sdiv rs2_val
-
--- TO DO
 def DIV_pure64_unsigned (rs2_val : BitVec 64) (rs1_val : BitVec 64) : BitVec 64 :=
   BitVec.extractLsb' 0 64 (BitVec.ofInt 65 (if ((rs2_val.toNat):Int) = 0 then -1 else (rs1_val.toNat : Int).tdiv (rs2_val.toNat: Int)))
 
