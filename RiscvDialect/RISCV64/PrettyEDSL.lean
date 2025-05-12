@@ -114,7 +114,7 @@ Bellow we implement the form, where an operation has `one` attirbute value.
 e.g constant or single register operations.
 -/
 -- to do: doesnt parse negative numerals atm -> dont know why neg num doesn't work
-syntax mlir_op_operand " = " "li" "(" num (" : " mlir_type)? ")"
+syntax mlir_op_operand " = " "li" "(" MLIR.EDSL.neg_num (" : " mlir_type)? ")"
   (" : " mlir_type)? : mlir_op
 macro_rules
   | `(mlir_op| $res:mlir_op_operand = li ($x)
@@ -122,8 +122,8 @@ macro_rules
       -- let hardcodedTy ← `(mlir_type| !i64)
       let outer_type ← outer_type.getDM `(mlir_type| _) -- extract the optional type- extract the optional type, else default to return type
       `(mlir_op| $res:mlir_op_operand = "li"()
-          {imm = $x:num :  $outer_type} : ( $outer_type) -> ( $outer_type) )
-
+          {imm = $x:neg_num :  $outer_type} : ( $outer_type) -> ( $outer_type) )
+-- changed this to neg_num which must still be done for upstreamed version.
 
 /- -- version where outer type was  needed
 macro_rules
@@ -221,4 +221,3 @@ private theorem test_rewrite :
   }].denote := by
     simp_peephole
     simp [RV64Semantics.RTYPE_pure64_RISCV_SUB]
-
