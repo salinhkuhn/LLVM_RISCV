@@ -11,6 +11,32 @@ open InstCombine(LLVM) -- analog to RISC-V
 -- done
 
 
+-- tentative adding pattern fr operand involving only one varible -> maybe generalize tzhis more genrally as a rewrte ?
+
+def llvm_sub_self: Com  LLVMPlusRiscV [.llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
+    ^entry (%x: i64 ): -- adding y to make it compile
+      %1 = llvm.sub  %x, %x : i64 -- value depends on wether to no overflow flag is present or not
+      llvm.return %1 : i64
+  }]
+
+def sub_riscv_self: Com  LLVMPlusRiscV [.llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
+    ^entry (%x: i64):
+      %0 = "builtin.unrealized_conversion_cast"(%x) : (i64) -> !i64
+      %2 = sub %0, %0 : !i64 -- value depends on wether to no overflow flag is present or not
+      %3 = "builtin.unrealized_conversion_cast" (%2) : (!i64) -> (i64)
+      llvm.return %3 : i64
+  }]
+
+def llvm_sub_lower_riscv_no_flag_self: LLVMPeepholeRewriteRefine [Ty.llvm (.bitvec 64)] :=
+  {lhs := llvm_sub_self , rhs := sub_riscv_self, correct := by
+        unfold llvm_sub_self sub_riscv_self
+        simp_peephole
+        sorry
+      }
+
+
+
+
 def llvm_sub: Com  LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] .pure (.llvm (.bitvec 64))  := [LV| {
     ^entry (%x: i64, %y: i64 ):
       %1 = llvm.sub  %x, %y : i64 -- value depends on wether to no overflow flag is present or not

@@ -57,56 +57,6 @@ def rewritePeephole_multi
     rewritePeephole_go_multi (fuel_def target) prs 0 target
 -/
 
-def nr_of_rewrites := 10
-def fuel_def {d : Dialect} [DialectSignature d] {Γ : Ctxt d.Ty} {eff : EffectKind} {t : d.Ty} (p: Com d Γ eff t) : Nat := max (Com.size p) nr_of_rewrites
-
--- to do: this example stack overflows when performing the lowering.
-def peep_00_r:=
-      [LV|{
-      ^bb0(%X : i64, %Y : i64 ):
-      %1 = llvm.add %X, %Y : i64
-      %2 = llvm.sub %X, %X : i64
-      %3 = llvm.add %1, %2 : i64
-      llvm.return %3 : i64
-  }]
-def peep_00_l:=
-      [LV|{
-      ^bb0(%X : i64, %Y : i64):
-      %1 = llvm.add %X, %Y : i64
-      %2 = llvm.add %1, %Y : i64
-      llvm.return %2 : i64
-  }]
-def peep0  : PeepholeRewrite LLVMPlusRiscV [.llvm (.bitvec 64), .llvm (.bitvec 64)] (.llvm (.bitvec 64)) :=
-  {lhs :=  peep_00_r , rhs := peep_00_l ,
-    correct :=  by
-     sorry
-  }
-
-def test_peep0 :  Com LLVMPlusRiscV (Ctxt.ofList [.llvm (.bitvec 64),.llvm (.bitvec 64)]) .pure (.llvm (.bitvec 64)) :=
-  rewritePeephole_multi LLVMPlusRiscV (15) (loweringPass) peep_00_r
-#eval! test_peep0
-
-
-def test_pep0_dce:= (DCE.dce' test_peep0)
-#eval! test_pep0_dce
-def test_pep0_dce_dce := (DCE.dce' test_pep0_dce.val)
-#eval! test_pep0_dce_dce
-
-
-#eval! peep_00_r
-
--- owering to riscv 5, not yet peephole optimized
-def test_pep0_dce_dce3 := (DCE.dce' test_pep0_dce_dce.val)
-#eval!  test_pep0_dce_dce3
-
--- first time running common subexpression elimination
-
-unsafe def test_pep0_cse := (CSE.cse' test_pep0_dce_dce3.val)
-#eval! test_pep0_cse
-
-
-
-
 /-
 optimization found in the gcc backend
 

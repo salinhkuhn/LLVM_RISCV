@@ -52,9 +52,11 @@ def shl_match := List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND
 
 def srl_match := List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND [llvm_srl_lower_riscv,llvm_srl_lower_riscv_exact]
 
-def sub_match := List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND
-     [llvm_sub_lower_riscv_no_flag,llvm_sub_nuw_lower_riscv, llvm_sub_nsw_lower_riscv, llvm_sub_nuw_lower_riscv]
 
+def sub_match_self :=  List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND  [llvm_sub_lower_riscv_no_flag_self]
+
+def sub_match := List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND
+     [ llvm_sub_lower_riscv_no_flag,llvm_sub_nuw_lower_riscv, llvm_sub_nsw_lower_riscv, llvm_sub_nuw_lower_riscv]
 def udiv_match := List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND
     [llvm_udiv_lower_riscv_no_flag, llvm_udiv_lower_riscv_flag]
 
@@ -62,6 +64,8 @@ def urem_match := List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND [l
 def xor_match := List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND [llvm_xor_lower_riscv]
 
 --- to do : double check, especially if all constants are covered.
+
+def loweringPassSingle := List.flatten [ sub_match_self]
 def loweringPass :=
   List.flatten [
     add_match,
@@ -73,13 +77,14 @@ def loweringPass :=
     sdiv_match,
     shl_match,
     srl_match,
+    --sub_match_self, -- atm this throws an error because only takes in one free variable, might need to change this
     sub_match,
     udiv_match,
     urem_match,
     xor_match
   ]
 -- TO DO: rethink this pass
-def reconcile_cast_pass_llvm := List.map LLVMToRiscvPeepholeRewriteRefine.toPeepholeUNSOUND [double_cast_elimination_LLVM_to_RISCV, cast_eliminiation_llvm] -- I want to modell this as a separat pass after performing the lowerings.
+def reconcile_cast_pass_llvm := List.map RiscVToLLVMPeepholeRewriteRefine.toPeepholeUNSOUND [cast_eliminiation_riscv] -- [double_cast_elimination_LLVM_to_RISCV, cast_eliminiation_llvm] -- I want to modell this as a separat pass after performing the lowerings.
 
 
 /- ! example workflow
