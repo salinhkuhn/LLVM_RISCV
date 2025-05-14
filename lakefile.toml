@@ -19,3 +19,8 @@ rev = "forSarah"
 [[lean_exe]]
 name = "RiscvDialectExe"
 root = "RiscvDialect"
+
+[[lean_exe]]
+name = "opt2"
+root = "RiscvDialect.LLVMRiscv.Opt2"
+supportInterpreter = true

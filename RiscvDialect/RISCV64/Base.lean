@@ -105,8 +105,18 @@ inductive Op
 /- RISC-V `Zicond` conditional operations extension  -/
 | czero.eqz
 | czero.nez
-deriving DecidableEq, Repr
+deriving DecidableEq
 
+
+
+instance : Repr (Op) where
+  reprPrec
+    | .bext , _ => "bext"
+    | .add , _ => "add"
+    | _ , _ => "const"
+
+
+#eval repr Op.bext
 /-
 TO DO in the future: zbb_rytpe full -> will be implementeed as soon as MVP exists.
 | andn
@@ -127,10 +137,28 @@ Defining a type system for the `RISCV64` dialect. `bv` represents bit vector.
 -/
 inductive Ty
   | bv : Ty
-  deriving DecidableEq, Repr, Inhabited
+  deriving DecidableEq, Inhabited
+
+instance : Repr (Ty) where
+  reprPrec
+    | .bv, _ => "reg64" -- wildcard is for predcedence level
+
+
+#eval repr Ty.bv
+
+/-
+
+def reprForRiscvAsm (op : _ ) : Format :=
+  let out : String := match op with
+    | _ => "add"
+  Repr.addAppParen (Format.group (Format.nest
+    (if prec >= max_prec then 1 else 2) f!"llvm.{op}"))
+    prec -/
 
 instance : ToString (Ty) where
   toString t := repr t |>.pretty
+
+
 
 /-!
 Connecting the `bv` type to its underlying Lean type `BitVec 64`. By providing a `TyDenote` instance,

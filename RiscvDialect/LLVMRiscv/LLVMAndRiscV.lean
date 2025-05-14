@@ -19,16 +19,28 @@ inductive Ty where
   | riscv : (Dialect.Ty RISCV64.RV64) -> Ty
   deriving DecidableEq, Repr
 
+#eval repr (Ty.llvm (.bitvec 64))
 
-
-
+instance : Repr (Ty) where
+  reprPrec
+    | .llvm llvm, _ => repr llvm
+    | .riscv riscv, _ => repr riscv
 
 inductive Op where
   | llvm : (Dialect.Op LLVM) -> Op
   | riscv : (Dialect.Op RISCV64.RV64) -> Op
   | builtin.unrealized_conversion_cast.riscvToLLVM : Op
   | builtin.unrealized_conversion_cast.LLVMToriscv : Op
-  deriving DecidableEq, Repr
+  deriving DecidableEq
+
+instance : Repr (Op) where
+  reprPrec
+  | .llvm llvm, _ => repr llvm
+  | .riscv riscv, _ => repr riscv
+  | .builtin.unrealized_conversion_cast.riscvToLLVM, _ => "builtin.unrealized_conversion_cast"
+  | .builtin.unrealized_conversion_cast.LLVMToriscv, _ =>  "builtin.unrealized_conversion_cast"
+
+
 def builtin.unrealized_conversion_cast.riscvToLLVM (toCast : BitVec 64 ): Option (BitVec 64 ) := some toCast
 /--
 Casting a some x to x. The none (poison case) will be harded coded to zero bit vector as any

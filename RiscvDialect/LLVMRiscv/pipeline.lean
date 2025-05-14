@@ -154,6 +154,20 @@ unsafe def selectionPipeFuel100 {Γl : List LLVMPlusRiscV.Ty} (prog : Com LLVMPl
 -- next step here would be to remove the casts.
 -- i think cse does not yet match in the value of the immedates, therefore is pattern can't be recognized yet.
 
+-- here we do not perform cse because cse is unsafe
+ def selectionPipeFuel100Safe {Γl : List LLVMPlusRiscV.Ty} (prog : Com LLVMPlusRiscV (Ctxt.ofList Γl) .pure (.llvm (.bitvec 64))  ):=
+  let initial_dead_code :=  (DCE.dce' prog).val; -- first we eliminate the inital inefficenices in the code.
+  let lowerConst := (rewritePeephole_multi LLVMPlusRiscV (100) (loweringPassConst) initial_dead_code);
+  let lower_binOp_self := (rewritePeephole_multi LLVMPlusRiscV (100) (loweringPassSingle) lowerConst); --then we lower all single one operand instructions.
+  let remove_binOp_self_llvm := (DCE.dce' lower_binOp_self).val; -- then we eliminate first dead-code introdcued by the lowring the prev instructions.
+  let lowering_all :=  rewritePeephole_multi LLVMPlusRiscV (100) (loweringPass) remove_binOp_self_llvm;
+  let remove_llvm_instr := (DCE.dce' lowering_all).val;
+  let reconcile_Cast := rewritePeephole_multi LLVMPlusRiscV (100) (reconcile_cast_pass_llvm) remove_llvm_instr;
+  let minimal_cast := (DCE.dce' reconcile_Cast).val; -- to do think of whether this makes a diff.
+  --let minimal_cast := (DCE.dce' remove_dead_Cast).val; -- to do: unsrue why apply cast elimination twice
+  --let optimize_eq_cast := (CSE.cse' minimal_cast).val; -- this simplifies when an operand gets casted multiple times.
+  let out := (DCE.dce' minimal_cast).val;
+  out
 /- problem at the moment here that it needs to be generic over the width of the input program,
 so its not a function at the moment that is generic over program width -/
   def llvm002 := [LV| {
